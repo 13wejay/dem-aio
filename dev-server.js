@@ -1,0 +1,173 @@
+// Local Development Server with static file serving + proxy
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const https = require('https');
+const url = require('url');
+
+const PORT = 3000;
+const ROOT = __dirname;
+
+// Simple .env parser for local dev
+let envVars = {};
+try {
+  const envContent = fs.readFileSync(path.join(ROOT, '.env'), 'utf8');
+  envContent.split('\n').forEach(line => {
+    const parts = line.trim().split('=');
+    if (parts.length >= 2) {
+      const key = parts[0];
+      const val = parts.slice(1).join('=');
+      envVars[key] = val.replace(/["']/g, ''); // strip quotes
+    }
+  });
+} catch (e) {
+  console.log('No .env file found or failed to parse.');
+}
+
+const MIME_TYPES = {
+  '.html': 'text/html',
+  '.css': 'text/css',
+  '.js': 'application/javascript',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.tif': 'image/tiff',
+  '.tiff': 'image/tiff',
+  '.geojson': 'application/json',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff'
+};
+
+const ALLOWED_DOMAINS = [
+  'copernicus-dem-30m.s3',
+  'portal.opentopography.org',
+  'data.hydrosheds.org',
+  'opentopography.s3.sdsc.edu'
+];
+
+const server = http.createServer((req, res) => {
+  const parsedUrl = url.parse(req.url, true);
+
+  // CORS headers for all responses
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  // Env endpoint
+  if (parsedUrl.pathname === '/api/env') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ OPENTOPO_API_KEY: envVars.OPENTOPO_API_KEY || '' }));
+    return;
+  }
+
+  // Proxy endpoint
+  if (parsedUrl.pathname === '/api/proxy') {
+    const targetUrl = parsedUrl.query.url;
+    if (!targetUrl) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing url parameter' }));
+      return;
+    }
+
+    const isAllowed = ALLOWED_DOMAINS.some(d => targetUrl.includes(d));
+    if (!isAllowed) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Domain not allowed' }));
+      return;
+    }
+
+    console.log(`[PROXY] ${targetUrl}`);
+    const protocol = targetUrl.startsWith('https') ? https : http;
+
+    protocol.get(targetUrl, (proxyRes) => {
+      // Forward headers
+      if (proxyRes.headers['content-type']) res.setHeader('Content-Type', proxyRes.headers['content-type']);
+      if (proxyRes.headers['content-length']) res.setHeader('Content-Length', proxyRes.headers['content-length']);
+      if (proxyRes.headers['content-range']) res.setHeader('Content-Range', proxyRes.headers['content-range']);
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.writeHead(proxyRes.statusCode);
+      proxyRes.pipe(res);
+    }).on('error', (err) => {
+      console.error('[PROXY ERROR]', err.message);
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Proxy failed: ' + err.message }));
+    });
+    return;
+  }
+
+  // Save files locally
+  if (parsedUrl.pathname === '/api/save' && req.method === 'POST') {
+    const filename = parsedUrl.query.filename || `export_${Date.now()}.dat`;
+    const exportsDir = path.join(ROOT, 'exports');
+    
+    // Ensure exports directory exists
+    if (!fs.existsSync(exportsDir)) {
+      fs.mkdirSync(exportsDir);
+    }
+    
+    const savePath = path.join(exportsDir, filename);
+    const writeStream = fs.createWriteStream(savePath);
+    
+    req.pipe(writeStream);
+    
+    req.on('end', () => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, path: savePath }));
+    });
+    
+    req.on('error', (err) => {
+      console.error('[SAVE ERROR]', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Save failed: ' + err.message }));
+    });
+    return;
+  }
+
+  // Static file serving
+  let filePath = parsedUrl.pathname;
+  if (filePath === '/') filePath = '/index.html';
+  filePath = path.join(ROOT, filePath);
+
+  // Prevent directory traversal
+  if (!filePath.startsWith(ROOT)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
+
+  fs.stat(filePath, (err, stats) => {
+    if (err || !stats.isFile()) {
+      res.writeHead(404);
+      res.end('Not Found');
+      return;
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+    res.writeHead(200, { 'Content-Type': contentType });
+    fs.createReadStream(filePath).pipe(res);
+  });
+});
+
+server.listen(PORT, () => {
+  console.log(`
+  ┌───────────────────────────────────────┐
+  │                                       │
+  │   🌍 DEM Explorer Dev Server          │
+  │                                       │
+  │   Local:  http://localhost:${PORT}       │
+  │   Proxy:  /api/proxy?url=...          │
+  │                                       │
+  │   Press Ctrl+C to stop                │
+  │                                       │
+  └───────────────────────────────────────┘
+  `);
+});

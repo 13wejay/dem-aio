@@ -1,0 +1,10 @@
+{
+  "name": "dem-explorer",
+  "version": "1.0.0",
+  "description": "DEM Explorer - Digital Elevation Model Viewer & Processor",
+  "scripts": {
+    "dev": "node dev-server.js",
+    "start": "node dev-server.js"
+  },
+  "dependencies": {}
+}
