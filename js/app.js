@@ -352,22 +352,49 @@ DEM.app = (function () {
   }
 
   /* --- Export Functions --- */
-  function exportRawDEM() {
+  async function exportRawDEM() {
     const dem = DEM.dem.getCurrent();
     if (!dem) return;
-    // Export elevation data as a JSON (since we can't create GeoTIFF client-side easily)
-    const exportData = {
-      type: 'DEM_Export',
-      bbox: dem.bbox,
-      width: dem.width,
-      height: dem.height,
-      resolution: dem.transform.pixelWidth,
-      source: dem.source ? dem.source.name : 'Unknown',
-      elevations: Array.from(dem.data)
-    };
-    const blob = new Blob([JSON.stringify(exportData)], { type: 'application/json' });
-    DEM.utils.downloadBlob(blob, 'dem_export.json');
-    DEM.utils.toast('DEM data exported', 'success');
+
+    DEM.utils.showLoading('Generating GeoTIFF...');
+    
+    try {
+      if (typeof GeoTIFF !== 'undefined' && typeof GeoTIFF.writeArrayBuffer === 'function') {
+        const metadata = {
+          width: dem.width,
+          height: dem.height,
+          GeographicTypeGeoKey: 4326, // WGS 84
+          ModelPixelScale: [Math.abs(dem.transform.pixelWidth), Math.abs(dem.transform.pixelHeight), 0],
+          ModelTiepoint: [0, 0, 0, dem.transform.originX, dem.transform.originY, 0]
+        };
+
+        const arrayBuffer = await GeoTIFF.writeArrayBuffer(dem.data, metadata);
+        const blob = new Blob([arrayBuffer], { type: 'image/tiff' });
+        
+        DEM.utils.hideLoading();
+        DEM.utils.downloadBlob(blob, 'dem_export.tif');
+        DEM.utils.toast('DEM exported as GeoTIFF', 'success');
+      } else {
+        throw new Error('GeoTIFF.writeArrayBuffer not available in runtime');
+      }
+    } catch (err) {
+      console.warn('GeoTIFF export failed or unsupported, falling back to JSON:', err);
+      // Fallback: Export elevation data as a JSON
+      const exportData = {
+        type: 'DEM_Export',
+        bbox: dem.bbox,
+        width: dem.width,
+        height: dem.height,
+        resolution: dem.transform.pixelWidth,
+        source: dem.source ? dem.source.name : 'Unknown',
+        elevations: Array.from(dem.data)
+      };
+      const blob = new Blob([JSON.stringify(exportData)], { type: 'application/json' });
+      
+      DEM.utils.hideLoading();
+      DEM.utils.downloadBlob(blob, 'dem_export.json');
+      DEM.utils.toast('Failed to create TIF. Exported as JSON instead.', 'info');
+    }
   }
 
   function exportHillshade() {

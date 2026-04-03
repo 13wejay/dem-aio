@@ -59,29 +59,28 @@ DEM.dem = (function () {
         return `https://portal.opentopography.org/API/globaldem?demtype=AW3D30&south=${south}&north=${north}&west=${west}&east=${east}&outputFormat=GTiff&API_Key=${key}`;
       }
     },
-    hydrosheds: {
-      name: 'HydroSHEDS',
+    copernicus90: {
+      name: 'Copernicus GLO-90',
       resolution: '90m (~3 arcsec)',
-      datum: 'EGM96',
+      datum: 'EGM2008',
       projection: 'EPSG:4326',
       requiresKey: false,
       getTileUrls(west, south, east, north) {
-        // HydroSHEDS v1 CON tiles: 5°×5° grid
         const tiles = [];
-        const startLat = Math.floor(south / 5) * 5;
-        const endLat = Math.floor(north / 5) * 5;
-        const startLon = Math.floor(west / 5) * 5;
-        const endLon = Math.floor(east / 5) * 5;
-        for (let lat = startLat; lat <= endLat; lat += 5) {
-          for (let lon = startLon; lon <= endLon; lon += 5) {
-            const latP = lat >= 0 ? 'n' : 's';
-            const lonP = lon >= 0 ? 'e' : 'w';
+        const startLat = Math.floor(south);
+        const endLat = Math.floor(north);
+        const startLon = Math.floor(west);
+        const endLon = Math.floor(east);
+        for (let lat = startLat; lat <= endLat; lat++) {
+          for (let lon = startLon; lon <= endLon; lon++) {
+            const latP = lat >= 0 ? 'N' : 'S';
+            const lonP = lon >= 0 ? 'E' : 'W';
             const latS = String(Math.abs(lat)).padStart(2, '0');
             const lonS = String(Math.abs(lon)).padStart(3, '0');
-            const name = `${latP}${latS}${lonP}${lonS}_con`;
+            const name = `Copernicus_DSM_COG_30_${latP}${latS}_00_${lonP}${lonS}_00_DEM`;
             tiles.push({
               name, lat, lon,
-              url: `https://data.hydrosheds.org/file/hydrosheds-v1-dem/hyd_glo_dem_15s.tif`
+              url: `https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com/${name}/${name}.tif`
             });
           }
         }

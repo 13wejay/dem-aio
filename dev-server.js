@@ -42,6 +42,7 @@ const MIME_TYPES = {
 
 const ALLOWED_DOMAINS = [
   'copernicus-dem-30m.s3',
+  'copernicus-dem-90m.s3',
   'portal.opentopography.org',
   'data.hydrosheds.org',
   'opentopography.s3.sdsc.edu'
