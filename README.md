@@ -27,8 +27,8 @@ To run DEM Explorer locally, you just need Node.js installed to serve the static
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/dem-explorer.git
-   cd dem-explorer
+   git clone https://github.com/13wejay/dem-aio.git
+   cd dem-aio
    ```
 
 2. **Start the development server:**
