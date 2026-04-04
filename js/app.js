@@ -156,30 +156,7 @@ DEM.app = (function () {
     document.getElementById('btn-export-contour').addEventListener('click', exportContour);
     document.getElementById('btn-export-screenshot').addEventListener('click', exportScreenshot);
 
-    // Settings modal
-    document.getElementById('btn-settings').addEventListener('click', () => {
-      const key = localStorage.getItem('dem_api_key_opentopo') || '';
-      document.getElementById('api-key-opentopo').value = key;
-      document.getElementById('modal-settings').classList.add('visible');
-    });
-    document.getElementById('btn-modal-close').addEventListener('click', () => {
-      document.getElementById('modal-settings').classList.remove('visible');
-    });
-    document.getElementById('btn-modal-save').addEventListener('click', () => {
-      const key = document.getElementById('api-key-opentopo').value.trim();
-      if (key) {
-        localStorage.setItem('dem_api_key_opentopo', key);
-        DEM.utils.toast('API key saved', 'success');
-      } else {
-        localStorage.removeItem('dem_api_key_opentopo');
-      }
-      document.getElementById('modal-settings').classList.remove('visible');
-    });
-    document.getElementById('modal-settings').addEventListener('click', (e) => {
-      if (e.target === e.currentTarget) {
-        e.currentTarget.classList.remove('visible');
-      }
-    });
+
 
     // Initial ramp preview
     updateRampPreview('viridis');

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DEM Explorer — Digital Elevation Model Viewer</title>
+  <title>DEM Explorer — Digital Elevation Model Viewer by Wijaya</title>
   <meta name="description" content="Download, visualize, and analyze Digital Elevation Models from multiple free sources. Elevation maps, hillshade, and contour generation.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
@@ -33,10 +33,12 @@
     <header class="app-header">
       <div class="logo">
         <img src="favicon.svg" alt="Logo" style="width: 28px; height: 28px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">
-        <span>DEM</span> Explorer
+        <span>DEM</span> Explorer by Wijaya
       </div>
       <div class="header-actions">
-        <button class="btn btn-icon" id="btn-settings" title="API Settings"><i data-lucide="settings" style="width:18px;height:18px"></i></button>
+        <a href="https://github.com/13wejay/dem-aio" target="_blank" class="btn btn-icon" title="View Source on GitHub" style="color: var(--text-secondary); text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.2c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+        </a>
         <button class="btn btn-icon" id="btn-toggle-sidebar" title="Toggle Sidebar"><i data-lucide="menu" style="width:18px;height:18px"></i></button>
       </div>
     </header>
@@ -315,21 +317,6 @@
     </div>
   </div>
 
-  <!-- API Key Modal -->
-  <div class="modal-overlay" id="modal-settings">
-    <div class="modal">
-      <h3 style="display:flex; align-items:center; gap:8px;"><i data-lucide="settings" style="width:20px;height:20px"></i> API Settings</h3>
-      <p>Configure API keys for DEM sources that require authentication. Keys are stored in your browser only.</p>
-      <div class="input-group">
-        <label>OpenTopography API Key <span class="info-tip" data-tip="Free key from opentopography.org">?</span></label>
-        <input type="text" id="api-key-opentopo" placeholder="Enter your API key...">
-      </div>
-      <div class="btn-group">
-        <button class="btn btn-secondary" id="btn-modal-close">Cancel</button>
-        <button class="btn btn-primary" id="btn-modal-save">Save</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Toast Container -->
   <div class="toast-container" id="toast-container"></div>
