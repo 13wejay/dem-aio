@@ -8,6 +8,7 @@ DEM.viz = (function () {
   let hillshadeCanvas = null;
   let contourGeoJSON = null;
   let rawTiffBlob = null; // for export
+  let currentPlotty = null;
 
   /* --- Color Ramp Definitions --- */
   const colorRamps = {
@@ -38,22 +39,44 @@ DEM.viz = (function () {
     // Use plotty if available, else manual rendering
     if (typeof plotty !== 'undefined') {
       try {
+        if (!plotty.colorsLoaded) {
+          Object.keys(colorRamps).forEach(name => {
+            const colors = colorRamps[name];
+            const positions = colors.map((_, i) => i / (colors.length - 1));
+            try { plotty.addColorScale(name, colors, positions); } catch(e){}
+          });
+          plotty.colorsLoaded = true;
+        }
+
         // Replace NaN with min-1 for plotty
         const cleanData = new Float32Array(data.length);
         for (let i = 0; i < data.length; i++) {
           cleanData[i] = isNaN(data[i]) ? min - 1 : data[i];
         }
-        const plot = new plotty.plot({
-          canvas: elevationCanvas,
-          data: cleanData,
-          width: width,
-          height: height,
-          domain: [min, max],
-          colorScale: ramp
-        });
-        plot.render();
+
+        if (!currentPlotty || currentPlotty.canvas !== elevationCanvas) {
+          currentPlotty = new plotty.plot({
+            canvas: elevationCanvas,
+            data: cleanData,
+            width: width,
+            height: height,
+            domain: [min, max],
+            colorScale: ramp
+          });
+        } else {
+          currentPlotty.setData(cleanData, width, height);
+          currentPlotty.setDomain([min, max]);
+          currentPlotty.setColorScale(ramp);
+        }
+        
+        currentPlotty.render();
       } catch (e) {
         console.warn('Plotty failed, using manual rendering:', e);
+        // If webgl creation failed, recreate canvas and fallback
+        elevationCanvas = document.createElement('canvas');
+        elevationCanvas.width = width;
+        elevationCanvas.height = height;
+        currentPlotty = null;
         manualColorRender(elevationCanvas, data, width, height, min, max, ramp);
       }
     } else {

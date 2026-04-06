@@ -87,40 +87,6 @@ DEM.dem = (function () {
         return tiles;
       }
     },
-    fabdem: {
-      name: 'FABDEM',
-      resolution: '30m',
-      datum: 'EGM2008',
-      projection: 'EPSG:4326',
-      requiresKey: true,
-      getApiUrl(west, south, east, north) {
-        const key = localStorage.getItem('dem_api_key_opentopo') || '';
-        return `https://portal.opentopography.org/API/globaldem?demtype=FABDEM&south=${south}&north=${north}&west=${west}&east=${east}&outputFormat=GTiff&API_Key=${key}`;
-      }
-    },
-    merit: {
-      name: 'MERIT DEM',
-      resolution: '90m',
-      datum: 'EGM96',
-      projection: 'EPSG:4326',
-      requiresKey: true,
-      getApiUrl(west, south, east, north) {
-        const key = localStorage.getItem('dem_api_key_opentopo') || '';
-        return `https://portal.opentopography.org/API/globaldem?demtype=MERITDEM&south=${south}&north=${north}&west=${west}&east=${east}&outputFormat=GTiff&API_Key=${key}`;
-      }
-    },
-    tandemx: {
-      name: 'TanDEM-X 90m',
-      resolution: '90m',
-      datum: 'WGS84',
-      projection: 'EPSG:4326',
-      requiresKey: true,
-      getApiUrl(west, south, east, north) {
-        const key = localStorage.getItem('dem_api_key_opentopo') || '';
-        // Note: The correct demtype for TanDEM-X 90m might vary or not be strictly available, we will try TDX90m
-        return `https://portal.opentopography.org/API/globaldem?demtype=TDX90m&south=${south}&north=${north}&west=${west}&east=${east}&outputFormat=GTiff&API_Key=${key}`;
-      }
-    },
     nasadem: {
       name: 'NASADEM',
       resolution: '30m',

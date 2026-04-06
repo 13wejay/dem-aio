@@ -170,7 +170,7 @@ body {
 .sidebar-section.collapsed .section-chevron { transform: rotate(-90deg); }
 .section-content {
   padding: 0 14px 14px;
-  max-height: 600px;
+  max-height: 650px;
   overflow: hidden;
   transition: max-height 0.35s ease, padding 0.35s ease;
 }
