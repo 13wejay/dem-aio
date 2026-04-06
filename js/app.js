@@ -8,7 +8,8 @@ DEM.app = (function () {
     selectedSource: 'copernicus',
     currentViz: 'elevation',
     demLoaded: false,
-    bbox: null
+    bbox: null,
+    uploadedBoundary: null
   };
 
   async function init() {
@@ -43,20 +44,61 @@ DEM.app = (function () {
 
     // Bbox buttons
     document.getElementById('btn-draw-bbox').addEventListener('click', () => {
+      state.uploadedBoundary = null;
       DEM.mapModule.activateDraw();
     });
     document.getElementById('btn-clear-bbox').addEventListener('click', () => {
+      state.uploadedBoundary = null;
       DEM.mapModule.clearBBox();
       disableDEM();
       DEM.utils.toast('Bounding box cleared', 'info');
     });
     document.getElementById('btn-apply-bbox').addEventListener('click', () => {
+      state.uploadedBoundary = null;
       const bbox = DEM.mapModule.drawBBoxFromInputs();
       if (bbox) {
         state.bbox = bbox;
         onBBoxChanged(bbox);
         DEM.utils.toast('Bounding box applied', 'success');
         console.log('[DEM] BBox applied:', bbox);
+      }
+    });
+
+    // Upload Boundary
+    document.getElementById('btn-upload-boundary').addEventListener('click', () => {
+      document.getElementById('file-upload-boundary').click();
+    });
+
+    document.getElementById('file-upload-boundary').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        DEM.utils.showLoading('Parsing boundary...');
+        let geojson;
+        if (file.name.endsWith('.zip') || file.name.endsWith('.shp')) {
+          const buffer = await file.arrayBuffer();
+          geojson = await shp(buffer);
+        } else if (file.name.endsWith('.geojson') || file.name.endsWith('.json')) {
+          const text = await file.text();
+          geojson = JSON.parse(text);
+        } else {
+          throw new Error('Unsupported format. Need .zip (Shapefile) or .geojson');
+        }
+
+        const bbox = DEM.mapModule.drawUploadedBoundary(geojson);
+        if (bbox) {
+          state.bbox = bbox;
+          state.uploadedBoundary = geojson; // Store for later DEM masking
+          onBBoxChanged(bbox);
+          DEM.utils.toast('Boundary uploaded and applied', 'success');
+        }
+      } catch (err) {
+        DEM.utils.toast('Failed to load boundary: ' + err.message, 'error');
+        console.error(err);
+      } finally {
+        DEM.utils.hideLoading();
+        e.target.value = ''; // Reset input
       }
     });
 
@@ -202,7 +244,7 @@ DEM.app = (function () {
     btn.textContent = '⏳ Downloading...';
 
     try {
-      const demData = await DEM.dem.download(state.selectedSource, bbox);
+      const demData = await DEM.dem.download(state.selectedSource, bbox, state.uploadedBoundary);
       state.demLoaded = true;
 
       // Enable UI

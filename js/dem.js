@@ -86,6 +86,63 @@ DEM.dem = (function () {
         }
         return tiles;
       }
+    },
+    fabdem: {
+      name: 'FABDEM',
+      resolution: '30m',
+      datum: 'EGM2008',
+      projection: 'EPSG:4326',
+      requiresKey: true,
+      getApiUrl(west, south, east, north) {
+        const key = localStorage.getItem('dem_api_key_opentopo') || '';
+        return `https://portal.opentopography.org/API/globaldem?demtype=FABDEM&south=${south}&north=${north}&west=${west}&east=${east}&outputFormat=GTiff&API_Key=${key}`;
+      }
+    },
+    merit: {
+      name: 'MERIT DEM',
+      resolution: '90m',
+      datum: 'EGM96',
+      projection: 'EPSG:4326',
+      requiresKey: true,
+      getApiUrl(west, south, east, north) {
+        const key = localStorage.getItem('dem_api_key_opentopo') || '';
+        return `https://portal.opentopography.org/API/globaldem?demtype=MERITDEM&south=${south}&north=${north}&west=${west}&east=${east}&outputFormat=GTiff&API_Key=${key}`;
+      }
+    },
+    tandemx: {
+      name: 'TanDEM-X 90m',
+      resolution: '90m',
+      datum: 'WGS84',
+      projection: 'EPSG:4326',
+      requiresKey: true,
+      getApiUrl(west, south, east, north) {
+        const key = localStorage.getItem('dem_api_key_opentopo') || '';
+        // Note: The correct demtype for TanDEM-X 90m might vary or not be strictly available, we will try TDX90m
+        return `https://portal.opentopography.org/API/globaldem?demtype=TDX90m&south=${south}&north=${north}&west=${west}&east=${east}&outputFormat=GTiff&API_Key=${key}`;
+      }
+    },
+    nasadem: {
+      name: 'NASADEM',
+      resolution: '30m',
+      datum: 'EGM96',
+      projection: 'EPSG:4326',
+      requiresKey: true,
+      getApiUrl(west, south, east, north) {
+        const key = localStorage.getItem('dem_api_key_opentopo') || '';
+        return `https://portal.opentopography.org/API/globaldem?demtype=NASADEM&south=${south}&north=${north}&west=${west}&east=${east}&outputFormat=GTiff&API_Key=${key}`;
+      }
+    },
+    gebco: {
+      name: 'GEBCO',
+      resolution: '500m',
+      datum: 'WGS84',
+      projection: 'EPSG:4326',
+      requiresKey: true,
+      getApiUrl(west, south, east, north) {
+        const key = localStorage.getItem('dem_api_key_opentopo') || '';
+        // We will default to GEBCOIceTopo 
+        return `https://portal.opentopography.org/API/globaldem?demtype=GEBCOIceTopo&south=${south}&north=${north}&west=${west}&east=${east}&outputFormat=GTiff&API_Key=${key}`;
+      }
     }
   };
 
@@ -227,7 +284,7 @@ DEM.dem = (function () {
   }
 
   /* --- Download DEM for a bbox and source --- */
-  async function download(sourceId, bbox) {
+  async function download(sourceId, bbox, uploadedBoundary = null) {
     const source = sources[sourceId];
     if (!source) throw new Error('Unknown source: ' + sourceId);
 
@@ -291,6 +348,10 @@ DEM.dem = (function () {
         }
       }
 
+      if (uploadedBoundary) {
+        maskWithGeoJSON(result, uploadedBoundary);
+      }
+
       result.source = source;
       currentDEM = result;
 
@@ -339,6 +400,64 @@ DEM.dem = (function () {
       },
       nodata: undefined
     };
+  }
+
+  /* --- Mask DEM using GeoJSON Polygon --- */
+  function maskWithGeoJSON(demData, geojson) {
+    if (!geojson) return;
+    DEM.utils.updateProgress(98, 'Masking to boundary...');
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = demData.width;
+    canvas.height = demData.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#fff';
+    const drawRing = (ring) => {
+      ctx.beginPath();
+      for (let i = 0; i < ring.length; i++) {
+        const [lon, lat] = ring[i];
+        const px = (lon - demData.transform.originX) / demData.transform.pixelWidth;
+        const py = (lat - demData.transform.originY) / demData.transform.pixelHeight;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+    };
+
+    const features = geojson.features ? geojson.features : (geojson.type === 'Feature' ? [geojson] : [geojson]);
+    for (const f of features) {
+      const geom = f.geometry || f; // handle direct geometry obj
+      if (!geom || !geom.type) continue;
+      const t = geom.type;
+      const coords = geom.coordinates;
+
+      if (t === 'Polygon') {
+        ctx.fillStyle = '#fff';
+        drawRing(coords[0]); ctx.fill();
+        ctx.fillStyle = '#000';
+        for(let i = 1; i < coords.length; i++) { drawRing(coords[i]); ctx.fill(); }
+      } else if (t === 'MultiPolygon') {
+        for (const poly of coords) {
+          ctx.fillStyle = '#fff';
+          drawRing(poly[0]); ctx.fill();
+          ctx.fillStyle = '#000';
+          for(let i = 1; i < poly.length; i++) { drawRing(poly[i]); ctx.fill(); }
+        }
+      }
+    }
+
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let maskedOut = 0;
+    for (let i = 0; i < demData.data.length; i++) {
+      if (imgData[i * 4] < 128) { // check red channel
+        demData.data[i] = NaN;
+        maskedOut++;
+      }
+    }
   }
 
   function getCurrent() { return currentDEM; }

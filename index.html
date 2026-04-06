@@ -21,6 +21,9 @@
   <!-- Plotty -->
   <script src="https://cdn.jsdelivr.net/npm/plotty@0.4.9/src/plotty.js"></script>
 
+  <!-- Shapefile JS (shpjs) -->
+  <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
+
   <!-- App CSS -->
   <link rel="stylesheet" href="css/main.css">
   
@@ -58,6 +61,8 @@
             <div class="section-content">
               <div class="btn-group" style="margin-bottom:10px">
                 <button class="btn btn-secondary btn-full" id="btn-draw-bbox"><i data-lucide="pencil" style="width:14px;height:14px"></i> Draw on Map</button>
+                <button class="btn btn-secondary btn-full" id="btn-upload-boundary"><i data-lucide="upload-cloud" style="width:14px;height:14px"></i> Upload Zip/JSON</button>
+                <input type="file" id="file-upload-boundary" accept=".zip,.geojson,.json" style="display:none">
                 <button class="btn btn-secondary btn-icon-clear" id="btn-clear-bbox" title="Clear selection"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
               </div>
               <div class="input-row">
@@ -101,7 +106,6 @@
                     <h4>Copernicus GLO-30</h4>
                     <p>30m global coverage</p>
                   </div>
-                  <span class="source-badge">No Auth</span>
                 </div>
                 <div class="source-card" data-source="srtm">
                   <div class="radio"></div>
@@ -109,7 +113,6 @@
                     <h4>SRTM (30m/90m)</h4>
                     <p>NASA · Global ±60°</p>
                   </div>
-                  <span class="source-badge key-required">API Key</span>
                 </div>
                 <div class="source-card" data-source="alos">
                   <div class="radio"></div>
@@ -117,7 +120,6 @@
                     <h4>ALOS AW3D30</h4>
                     <p>JAXA · 30m global</p>
                   </div>
-                  <span class="source-badge key-required">API Key</span>
                 </div>
                 <div class="source-card" data-source="copernicus90">
                   <div class="radio"></div>
@@ -125,7 +127,41 @@
                     <h4>Copernicus GLO-90</h4>
                     <p>90m global coverage</p>
                   </div>
-                  <span class="source-badge">No Auth</span>
+                </div>
+                <div class="source-card" data-source="fabdem">
+                  <div class="radio"></div>
+                  <div class="source-info">
+                    <h4>FABDEM</h4>
+                    <p>30m bare-earth</p>
+                  </div>
+                </div>
+                <div class="source-card" data-source="merit">
+                  <div class="radio"></div>
+                  <div class="source-info">
+                    <h4>MERIT DEM</h4>
+                    <p>90m global</p>
+                  </div>
+                </div>
+                <div class="source-card" data-source="tandemx">
+                  <div class="radio"></div>
+                  <div class="source-info">
+                    <h4>TanDEM-X 90m</h4>
+                    <p>90m global DLR</p>
+                  </div>
+                </div>
+                <div class="source-card" data-source="nasadem">
+                  <div class="radio"></div>
+                  <div class="source-info">
+                    <h4>NASADEM</h4>
+                    <p>30m global</p>
+                  </div>
+                </div>
+                <div class="source-card" data-source="gebco">
+                  <div class="radio"></div>
+                  <div class="source-info">
+                    <h4>GEBCO</h4>
+                    <p>500m bathymetry</p>
+                  </div>
                 </div>
               </div>
               <button class="btn btn-primary btn-full" id="btn-download" style="margin-top:12px">

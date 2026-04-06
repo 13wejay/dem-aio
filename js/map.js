@@ -11,6 +11,7 @@ DEM.mapModule = (function () {
   let elevationOverlay = null;
   let hillshadeOverlay = null;
   let contourLayer = null;
+  let uploadedBoundaryLayer = null;
 
   /* --- Initialize Map --- */
   function init() {
@@ -168,8 +169,42 @@ DEM.mapModule = (function () {
   function clearBBox() {
     drawnItems.clearLayers();
     currentRect = null;
+    if (uploadedBoundaryLayer) {
+      map.removeLayer(uploadedBoundaryLayer);
+      uploadedBoundaryLayer = null;
+    }
     clearBBoxInputs();
     removeAllOverlays();
+  }
+
+  /* --- Draw uploaded boundary --- */
+  function drawUploadedBoundary(geojson) {
+    if (uploadedBoundaryLayer) { map.removeLayer(uploadedBoundaryLayer); }
+    drawnItems.clearLayers();
+    currentRect = null;
+    removeAllOverlays();
+
+    uploadedBoundaryLayer = L.geoJSON(geojson, {
+      style: {
+        color: '#f59e0b',
+        weight: 2,
+        fillOpacity: 0.1,
+        dashArray: '4, 4'
+      }
+    }).addTo(map);
+
+    const bounds = uploadedBoundaryLayer.getBounds();
+    map.fitBounds(bounds, { padding: [40, 40] });
+    syncBBoxInputs(bounds);
+    console.log('[MAP] Uploaded boundary drawn, synced inputs');
+    
+    // Draw the theoretical bounding box as a faint rect around the polygon
+    currentRect = L.rectangle(bounds, {
+      color: '#00d4aa', weight: 1, fillOpacity: 0.0, dashArray: '2, 6'
+    });
+    drawnItems.addLayer(currentRect);
+    
+    return getBBox();
   }
 
   /* --- Activate draw mode --- */
@@ -258,6 +293,7 @@ DEM.mapModule = (function () {
 
   return {
     init, getBBox, drawBBoxFromInputs, clearBBox, activateDraw,
+    drawUploadedBoundary,
     updateAreaBadge,
     setElevationOverlay, setElevationOpacity, showElevation,
     setHillshadeOverlay, showHillshade,
