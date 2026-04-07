@@ -254,6 +254,85 @@
             </div>
           </div>
 
+          <!-- Curve Number Calculator Section -->
+          <div class="sidebar-section" id="section-cn">
+            <div class="section-header" data-section="cn">
+              <h3><i data-lucide="calculator" style="width:16px;height:16px"></i> CN Calculator</h3>
+              <span class="section-chevron">▾</span>
+            </div>
+            <div class="section-content">
+              <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 10px;">
+                Calculate USDA TR-55 Curve Number using ESA WorldCover and HYSOGs250m.
+              </p>
+              <button class="btn btn-primary btn-full" id="btn-calculate-cn">
+                <i data-lucide="layers" style="width:16px;height:16px"></i> Generate CN Raster
+              </button>
+              
+              <div class="progress-container" id="cn-progress" style="display:none; margin-top: 10px;">
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="cn-progress-fill"></div>
+                </div>
+                <div class="progress-status" id="cn-progress-status">Fetching LULC...</div>
+              </div>
+
+              <!-- CN Layer Toggles -->
+              <div id="cn-layer-toggles" style="display:none; margin-top: 12px; font-size: 11px;">
+                <label class="checkbox-row" style="margin-bottom:6px">
+                  <input type="checkbox" id="toggle-cn-layer" checked>
+                  <span>Show CN Raster</span>
+                </label>
+
+                <label class="checkbox-row" style="margin-bottom:6px">
+                  <input type="checkbox" id="toggle-lulc-layer">
+                  <span>Show LULC Raster</span>
+                </label>
+
+                <label class="checkbox-row" style="margin-bottom:6px">
+                  <input type="checkbox" id="toggle-soil-layer">
+                  <span>Show Soil Raster</span>
+                </label>
+              </div>
+
+              <!-- CN Results Table -->
+              <div id="cn-results-container" style="display:none; margin-top: 12px;">
+                <h4 style="margin: 0 0 6px; font-size: 0.9em;">Sub-watershed Statistics</h4>
+                <div class="table-responsive">
+                  <table class="cn-table" id="cn-table">
+                    <thead>
+                      <tr>
+                        <th>Region</th>
+                        <th>Area (km²)</th>
+                        <th>Avg CN</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <!-- Rows injected dynamically -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              <!-- Export Buttons for CN -->
+              <div id="cn-exports" style="display:none; margin-top:12px;">
+                 <h4 style="margin: 0 0 6px; font-size: 0.9em;">Export Layers (GeoTIFF)</h4>
+                 <div class="export-grid">
+                   <button class="export-btn" id="btn-export-cn">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     CN Raster
+                   </button>
+                   <button class="export-btn" id="btn-export-lulc">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     LULC
+                   </button>
+                   <button class="export-btn" id="btn-export-soil">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     Soil Type
+                   </button>
+                 </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Statistics Section -->
           <div class="sidebar-section" id="section-stats">
             <div class="section-header" data-section="stats">
@@ -330,6 +409,55 @@
           <div class="spinner"></div>
           <div class="loading-text" id="loading-text">Processing...</div>
         </div>
+
+        <!-- Raster Values Box -->
+        <div id="raster-values-box" style="display:none; position:absolute; bottom:30px; left:10px; z-index:800; background:rgba(15,18,25,0.92); padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 20px rgba(0,0,0,0.4); font-family:var(--font-mono); font-size:11px; backdrop-filter:blur(12px);">
+          <div style="color:var(--text-secondary); margin-bottom:4px; font-size:10px; font-family:var(--font-ui); text-transform:uppercase; letter-spacing:0.5px;">Cursor Values</div>
+          <div style="margin-bottom:2px;">LULC ID: <span id="val-lulc" style="color:var(--text-primary); font-weight:600;">-</span></div>
+          <div style="margin-bottom:2px;">Soil: <span id="val-soil" style="color:var(--text-primary); font-weight:600;">-</span></div>
+          <div>CN: <span id="val-cn" style="color:var(--accent); font-weight:700;">-</span></div>
+        </div>
+
+        <!-- Float Map Legends -->
+        <div id="cn-map-legends" style="display:block; position:absolute; bottom:30px; right:10px; z-index:800; background:rgba(15,18,25,0.92); padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 20px rgba(0,0,0,0.4); font-size:11px; backdrop-filter:blur(12px);">
+          
+          <!-- CN Legend -->
+          <div id="map-legend-cn" style="display:none; margin-bottom:10px;">
+            <div style="color:var(--text-secondary); margin-bottom:4px; font-size:10px; font-family:var(--font-ui); text-transform:uppercase; letter-spacing:0.5px;">Curve Number</div>
+            <div class="ramp-preview ramp-jet" style="height:8px; margin-bottom:2px; border-radius:2px;"></div>
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-primary);">
+              <span>30</span><span>100</span>
+            </div>
+          </div>
+
+          <!-- Soil Legend -->
+          <div id="map-legend-soil" style="display:none; margin-bottom:10px;">
+            <div style="color:var(--text-secondary); margin-bottom:4px; font-size:10px; font-family:var(--font-ui); text-transform:uppercase; letter-spacing:0.5px;">Hydrologic Soil Group</div>
+            <div class="ramp-preview ramp-viridis" style="height:8px; margin-bottom:2px; border-radius:2px;"></div>
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-primary);">
+              <span>A</span><span>A/B/C/D</span><span>D</span>
+            </div>
+          </div>
+
+          <!-- LULC Legend -->
+          <div id="map-legend-lulc" style="display:none;">
+            <div style="color:var(--text-secondary); margin-bottom:4px; font-size:10px; font-family:var(--font-ui); text-transform:uppercase; letter-spacing:0.5px;">ESA WorldCover (10m)</div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size:10px; color:var(--text-primary);">
+              <div><span style="display:inline-block; width:10px; height:10px; background:#006400; vertical-align:middle; margin-right:4px;"></span>Trees (10)</div>
+              <div><span style="display:inline-block; width:10px; height:10px; background:#ffbb22; vertical-align:middle; margin-right:4px;"></span>Shrubland (20)</div>
+              <div><span style="display:inline-block; width:10px; height:10px; background:#ffff4c; vertical-align:middle; margin-right:4px;"></span>Grassland (30)</div>
+              <div><span style="display:inline-block; width:10px; height:10px; background:#f096ff; vertical-align:middle; margin-right:4px;"></span>Cropland (40)</div>
+              <div><span style="display:inline-block; width:10px; height:10px; background:#fa0000; vertical-align:middle; margin-right:4px;"></span>Built-up (50)</div>
+              <div><span style="display:inline-block; width:10px; height:10px; background:#b4b4b4; vertical-align:middle; margin-right:4px;"></span>Bare/Sparse (60)</div>
+              <div><span style="display:inline-block; width:10px; height:10px; background:#f0f0f0; vertical-align:middle; margin-right:4px;"></span>Snow/Ice (70)</div>
+              <div><span style="display:inline-block; width:10px; height:10px; background:#0064c8; vertical-align:middle; margin-right:4px;"></span>Water (80)</div>
+              <div><span style="display:inline-block; width:10px; height:10px; background:#0096a0; vertical-align:middle; margin-right:4px;"></span>Wetland (90)</div>
+              <div><span style="display:inline-block; width:10px; height:10px; background:#00cf75; vertical-align:middle; margin-right:4px;"></span>Mangroves (95)</div>
+              <div><span style="display:inline-block; width:10px; height:10px; background:#fae6a0; vertical-align:middle; margin-right:4px;"></span>Moss (100)</div>
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
   </div>
@@ -343,6 +471,7 @@
   <script src="js/map.js"></script>
   <script src="js/dem.js"></script>
   <script src="js/viz.js"></script>
+  <script src="js/cn.js"></script>
   <script src="js/app.js"></script>
   <script>
     lucide.createIcons();

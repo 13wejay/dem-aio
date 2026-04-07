@@ -7,8 +7,22 @@ DEM.viz = (function () {
   let elevationCanvas = null;
   let hillshadeCanvas = null;
   let contourGeoJSON = null;
-  let rawTiffBlob = null; // for export
+  let cachedElevationBlob = null;
+  let cachedHillshadeBlob = null;
   let currentPlotty = null;
+
+  /* --- Helper: Data URL to Blob --- */
+  function dataURLToBlob(dataURL) {
+    const arr = dataURL.split(',');
+    const mime = arr[0].match(/:(.*?);/)[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  }
 
   /* --- Color Ramp Definitions --- */
   const colorRamps = {
@@ -85,6 +99,7 @@ DEM.viz = (function () {
 
     // Create image overlay on map
     const imageUrl = elevationCanvas.toDataURL('image/png');
+    cachedElevationBlob = dataURLToBlob(imageUrl);
     const bounds = DEM.mapModule.getLeafletBounds(bbox);
     DEM.mapModule.setElevationOverlay(imageUrl, bounds, opacity !== undefined ? opacity : 0.8);
 
@@ -256,6 +271,7 @@ DEM.viz = (function () {
 
     ctx.putImageData(imgData, 0, 0);
     const imageUrl = hillshadeCanvas.toDataURL('image/png');
+    cachedHillshadeBlob = dataURLToBlob(imageUrl);
     const bounds = DEM.mapModule.getLeafletBounds(bbox);
     DEM.mapModule.setHillshadeOverlay(imageUrl, bounds, 0.85);
     return imageUrl;
@@ -407,14 +423,14 @@ DEM.viz = (function () {
     return result;
   }
 
-  /* --- Get canvases for export --- */
-  function getElevationCanvas() { return elevationCanvas; }
-  function getHillshadeCanvas() { return hillshadeCanvas; }
+  /* --- Get pre-cached blobs and data for export --- */
+  function getElevationBlob() { return cachedElevationBlob; }
+  function getHillshadeBlob() { return cachedHillshadeBlob; }
   function getContourGeoJSON() { return contourGeoJSON; }
 
   return {
     renderElevation, renderHillshade, generateContours,
-    getElevationCanvas, getHillshadeCanvas, getContourGeoJSON,
+    getElevationBlob, getHillshadeBlob, getContourGeoJSON,
     colorRamps
   };
 })();

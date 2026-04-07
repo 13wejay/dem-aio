@@ -417,12 +417,9 @@ DEM.app = (function () {
   }
 
   function exportHillshade() {
-    const canvas = DEM.viz.getHillshadeCanvas();
-    if (!canvas) { DEM.utils.toast('Generate hillshade first', 'error'); return; }
-    canvas.toBlob(blob => {
-      DEM.utils.downloadBlob(blob, 'hillshade.png');
-      DEM.utils.toast('Hillshade exported', 'success');
-    }, 'image/png');
+    const blob = DEM.viz.getHillshadeBlob();
+    if (!blob) { DEM.utils.toast('Generate hillshade first', 'error'); return; }
+    DEM.utils.downloadBlob(blob, 'hillshade.png');
   }
 
   function exportContour() {
@@ -430,19 +427,15 @@ DEM.app = (function () {
     if (!geojson) { DEM.utils.toast('Generate contours first', 'error'); return; }
     const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/json' });
     DEM.utils.downloadBlob(blob, 'contours.geojson');
-    DEM.utils.toast('Contours exported as GeoJSON', 'success');
   }
 
   function exportScreenshot() {
-    const canvas = DEM.viz.getElevationCanvas();
-    if (!canvas) { DEM.utils.toast('No elevation map to export', 'error'); return; }
-    canvas.toBlob(blob => {
-      DEM.utils.downloadBlob(blob, 'elevation_map.png');
-      DEM.utils.toast('Screenshot exported', 'success');
-    }, 'image/png');
+    const blob = DEM.viz.getElevationBlob();
+    if (!blob) { DEM.utils.toast('No elevation map to export', 'error'); return; }
+    DEM.utils.downloadBlob(blob, 'elevation_map.png');
   }
 
-  return { init, onBBoxChanged };
+  return { init, onBBoxChanged, getState: () => state };
 })();
 
 // Initialize on DOM ready

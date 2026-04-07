@@ -139,41 +139,48 @@ DEM.utils = {
     return Number(n).toFixed(decimals);
   },
 
-  /* --- Save to local drive via API --- */
-  downloadBlob(blob, filename) {
-    DEM.utils.showLoading(`Saving ${filename}...`);
-    
-    fetch(`/api/save?filename=${encodeURIComponent(filename)}`, {
-      method: 'POST',
-      body: blob
-    })
-    .then(res => res.json())
-    .then(data => {
-      DEM.utils.hideLoading();
-      if (data.success) {
-        DEM.utils.toast(`Saved to exports/${filename}`, 'success');
+  /* --- Client-Side Download --- */
+  async downloadBlob(blob, filename) {
+    DEM.utils.showLoading(`Preparing ${filename}...`);
+    try {
+      if (window.showSaveFilePicker) {
+        // Native File System API - saves directly to local drive
+        const opts = {
+          suggestedName: filename,
+          types: [{
+            description: 'File',
+            accept: { [blob.type || 'application/octet-stream']: ['.' + filename.split('.').pop()] }
+          }]
+        };
+        const handle = await window.showSaveFilePicker(opts);
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        DEM.utils.toast(`Saved directly to local drive: ${filename}`, 'success');
       } else {
-        DEM.utils.toast(`Failed to save: ${data.error}`, 'error');
-        // Fallback to browser download
-        DEM.utils.fallbackDownload(blob, filename);
+        // Standard Browser Download (with UUID bug fix)
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        
+        // Delay revoke to fix Edge/Chrome missing filename (UUID) bug
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 1000);
       }
-    })
-    .catch(err => {
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('Download error:', err);
+        DEM.utils.toast('Failed to save file.', 'error');
+      }
+    } finally {
       DEM.utils.hideLoading();
-      console.error('Save API Error:', err);
-      // Fallback
-      DEM.utils.fallbackDownload(blob, filename);
-    });
-  },
-
-  /* --- Fallback browser download --- */
-  fallbackDownload(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    }
   },
 
   /* --- Show/hide loading overlay --- */

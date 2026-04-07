@@ -859,6 +859,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 .empty-state .empty-icon { font-size: 24px; opacity: 0.5; }
 
+/* --- CN Table --- */
+.cn-table { width: 100%; border-collapse: collapse; font-family: var(--font-ui); font-size: 11px; }
+.cn-table th, .cn-table td { padding: 6px 8px; border: 1px solid var(--border); text-align: left; }
+.cn-table th { background: var(--bg-hover); color: var(--text-label); font-weight: 600; text-transform: uppercase; }
+.cn-table td { color: var(--text-primary); }
+.cn-table tbody tr:hover { background: var(--bg-input); }
+
 /* --- Responsive --- */
 @media (max-width: 768px) {
   .sidebar {
