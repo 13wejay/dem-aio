@@ -28,6 +28,7 @@ DEM.app = (function () {
 
     // Initialize map
     DEM.mapModule.init();
+    if (DEM.hydro) DEM.hydro.init();
 
     // Wire up sidebar section collapse
     document.querySelectorAll('.section-header').forEach(header => {

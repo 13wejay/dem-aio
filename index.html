@@ -254,6 +254,95 @@
             </div>
           </div>
 
+          <!-- Watershed & Hydrology Section -->
+          <div class="sidebar-section" id="section-hydro">
+            <div class="section-header" data-section="hydro">
+              <h3><i data-lucide="waves" style="width:16px;height:16px"></i> Hydrology & Watershed</h3>
+              <span class="section-chevron">▾</span>
+            </div>
+            <div class="section-content">
+              <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 10px;">
+                Extract flow direction, accumulate flow, and delineate watersheds.
+              </p>
+              
+              <div class="input-group" style="margin-bottom: 10px;">
+                <label>Distance Calculation</label>
+                <select id="hydro-distance-mode">
+                  <option value="approximate">Approximation (Fast, Geographic)</option>
+                  <option value="resample">UTM Nearest-Neighbor (Slow)</option>
+                </select>
+                <div style="font-size: 0.75em; color: var(--text-muted); margin-top: 4px;">
+                  * Approximation adjust geographic degrees to meters but may slightly distort streams depending on latitude.
+                </div>
+              </div>
+
+              <button class="btn btn-primary btn-full" id="btn-generate-hydro">
+                <i data-lucide="droplets" style="width:16px;height:16px"></i> Generate Flow Rasters
+              </button>
+              
+              <div class="progress-container" id="hydro-progress" style="display:none; margin-top: 10px;">
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="hydro-progress-fill"></div>
+                </div>
+                <div class="progress-status" id="hydro-progress-status">Processing...</div>
+              </div>
+
+              <!-- Hydrology Layer Toggles -->
+              <div id="hydro-layer-toggles" style="display:none; margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px;">
+                <h4 style="margin: 0 0 8px; font-size: 0.9em;">Map Layers</h4>
+                <label class="checkbox-row" style="margin-bottom:6px">
+                  <input type="checkbox" id="toggle-hydro-fill">
+                  <span>Sink Filled DEM</span>
+                </label>
+                <label class="checkbox-row" style="margin-bottom:6px">
+                  <input type="checkbox" id="toggle-hydro-dir">
+                  <span>Flow Direction (D8)</span>
+                </label>
+                <label class="checkbox-row" style="margin-bottom:6px">
+                  <input type="checkbox" id="toggle-hydro-acc" checked>
+                  <span>Flow Accumulation</span>
+                </label>
+                <label class="checkbox-row" style="margin-bottom:6px">
+                  <input type="checkbox" id="toggle-hydro-stream" checked>
+                  <span>Stream Network</span>
+                </label>
+                <label class="checkbox-row" style="margin-bottom:6px">
+                  <input type="checkbox" id="toggle-hydro-catchment" checked>
+                  <span>Catchment Polygon</span>
+                </label>
+              </div>
+
+              <div id="hydro-river-tools" style="display:none; margin-top: 15px; border-top: 1px solid var(--border); padding-top: 15px;">
+                <h4 style="margin: 0 0 8px; font-size: 0.9em;">River Classification</h4>
+                <div class="input-group">
+                  <label title="Minimum number of upstream cells to define a stream">Stream Threshold (Cells)</label>
+                  <input type="number" id="hydro-stream-threshold" value="1000" min="100">
+                </div>
+                <div class="input-group">
+                  <label>Ordering Method</label>
+                  <select id="hydro-stream-order">
+                    <option value="strahler">Strahler</option>
+                    <option value="shreve">Shreve</option>
+                  </select>
+                </div>
+                <button class="btn btn-secondary btn-full" id="btn-extract-streams">
+                  Extract Stream Network
+                </button>
+              </div>
+
+              <div id="hydro-watershed-tools" style="display:none; margin-top: 15px; border-top: 1px solid var(--border); padding-top: 15px;">
+                <h4 style="margin: 0 0 8px; font-size: 0.9em;">Watershed Delineation</h4>
+                <button class="btn btn-secondary btn-full" id="btn-select-pour-point">
+                  <i data-lucide="map-pin" style="width:14px;height:14px"></i> Select Pour Point on Map
+                </button>
+                <div id="hydro-pour-point-info" style="font-size: 0.8em; color: var(--text-secondary); margin-top: 6px; display:none;">
+                  Click anywhere on a mapped stream line to delineate its upstream catchment.
+                </div>
+              </div>
+
+            </div>
+          </div>
+
           <!-- Curve Number Calculator Section -->
           <div class="sidebar-section" id="section-cn">
             <div class="section-header" data-section="cn">
@@ -471,6 +560,7 @@
   <script src="js/map.js"></script>
   <script src="js/dem.js"></script>
   <script src="js/viz.js"></script>
+  <script src="js/hydro.js"></script>
   <script src="js/cn.js"></script>
   <script src="js/app.js"></script>
   <script>
