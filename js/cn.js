@@ -57,9 +57,16 @@ const cnCalculator = {
     }
 
     // Toggle events
-    document.getElementById('toggle-cn-layer').addEventListener('change', (e) => this.toggleLayer('cn', e.target.checked));
-    document.getElementById('toggle-lulc-layer').addEventListener('change', (e) => this.toggleLayer('lulc', e.target.checked));
-    document.getElementById('toggle-soil-layer').addEventListener('change', (e) => this.toggleLayer('soil', e.target.checked));
+    document.getElementById('toggle-cn-layer')?.addEventListener('change', (e) => this.toggleLayer('cn', e.target.checked));
+    document.getElementById('toggle-lulc-layer')?.addEventListener('change', (e) => this.toggleLayer('lulc', e.target.checked));
+    document.getElementById('toggle-soil-layer')?.addEventListener('change', (e) => this.toggleLayer('soil', e.target.checked));
+
+    // Opacity
+    document.getElementById('cn-opacity')?.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+      document.getElementById('cn-opacity-val').textContent = val + '%';
+      this.setOpacity(val / 100);
+    });
 
     // Export events
     document.getElementById('btn-export-cn')?.addEventListener('click', () => this.exportRaster(this.cnRaster, 'cn_raster.tif'));
@@ -78,16 +85,26 @@ const cnCalculator = {
 
     if (!layer) return;
 
-    const legendsBox = document.getElementById('cn-map-legends');
+    const legendsBox = document.getElementById('float-map-legends');
     if (legendsBox) legendsBox.style.display = 'block';
 
     if (show) {
-      if (!appMap.hasLayer(layer)) appMap.addLayer(layer);
+      if (!appMap.hasLayer(layer)) {
+        const opacity = document.getElementById('cn-opacity') ? parseInt(document.getElementById('cn-opacity').value) / 100 : 0.7;
+        layer.setOpacity(opacity);
+        layer.addTo(appMap);
+      }
       document.getElementById(legendId).style.display = 'block';
     } else {
       if (appMap.hasLayer(layer)) appMap.removeLayer(layer);
       document.getElementById(legendId).style.display = 'none';
     }
+  },
+
+  setOpacity: function(opacity) {
+    if (this.cnLayer) this.cnLayer.setOpacity(opacity);
+    if (this.lulcLayer) this.lulcLayer.setOpacity(opacity);
+    if (this.soilLayer) this.soilLayer.setOpacity(opacity);
   },
 
   updateProgress: function(percent, statusText) {
@@ -144,7 +161,13 @@ const cnCalculator = {
       
       this.layerToggles.style.display = 'block';
       this.exportsContainer.style.display = 'block';
-      document.getElementById('cn-map-legends').style.display = 'block';
+      
+      // Explicitly enable export buttons since they are disabled when map unloads
+      document.getElementById('btn-export-cn').disabled = false;
+      document.getElementById('btn-export-lulc').disabled = false;
+      document.getElementById('btn-export-soil').disabled = false;
+
+      document.getElementById('float-map-legends').style.display = 'block';
       if (typeof lucide !== 'undefined') lucide.createIcons();
 
       setTimeout(() => {
@@ -284,14 +307,54 @@ const cnCalculator = {
     const dx = (bbox.east - bbox.west) / cnRaster.width;
     const dy = (bbox.north - bbox.south) / cnRaster.height;
 
+    const canvas = document.createElement('canvas');
+    canvas.width = cnRaster.width;
+    canvas.height = cnRaster.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
     features.forEach((feat, idx) => {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#fff';
+
+      // Draw the feature geometry as a mask
+      const geom = feat.geometry || feat;
+      if (geom && geom.type) {
+        const drawRing = (ring) => {
+          ctx.beginPath();
+          for (let i = 0; i < ring.length; i++) {
+            const [lon, lat] = ring[i];
+            const px = (lon - bbox.west) / dx;
+            const py = (bbox.north - lat) / dy;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+        };
+
+        if (geom.type === 'Polygon') {
+          ctx.fillStyle = '#fff';
+          drawRing(geom.coordinates[0]); ctx.fill();
+          ctx.fillStyle = '#000';
+          for (let i = 1; i < geom.coordinates.length; i++) { drawRing(geom.coordinates[i]); ctx.fill(); }
+        } else if (geom.type === 'MultiPolygon') {
+          for (const poly of geom.coordinates) {
+            ctx.fillStyle = '#fff';
+            drawRing(poly[0]); ctx.fill();
+            ctx.fillStyle = '#000';
+            for (let i = 1; i < poly.length; i++) { drawRing(poly[i]); ctx.fill(); }
+          }
+        }
+      }
+
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
       let sum = 0, count = 0;
+
       for (let y = 0; y < cnRaster.height; y++) {
-        // const lat = bbox.north - (y + 0.5) * dy;
         for (let x = 0; x < cnRaster.width; x++) {
-          // const lng = bbox.west + (x + 0.5) * dx;
-          const val = cnRaster.data[y * cnRaster.width + x];
-          if (val !== -9999) {
+          const i = y * cnRaster.width + x;
+          const val = cnRaster.data[i];
+          if (val !== -9999 && imgData[i * 4] > 128) {
             sum += val;
             count++;
           }
@@ -299,7 +362,7 @@ const cnCalculator = {
       }
       
       const avg = count > 0 ? (sum / count).toFixed(1) : 'N/A';
-      const name = feat.properties.name || feat.properties.ID || `Basin ${idx + 1}`;
+      const name = feat.properties?.name || feat.properties?.ID || feat.properties?.Id || `Basin ${idx + 1}`;
       const area = (count * dx * dy * 111 * 111 * Math.cos(bbox.south*(Math.PI/180))).toFixed(2);
 
       this.cnTableBody.innerHTML += `<tr>
@@ -347,15 +410,17 @@ const cnCalculator = {
 
     // Create LULC Layer
     const lulcImg = this.createPlottyLayer(this.lulcData, [10, 100], 'esa-lulc');
-    this.lulcLayer = L.imageOverlay(lulcImg, bounds, { opacity: 0.7, zIndex: 301 });
+    this.lulcLayer = L.imageOverlay(lulcImg, bounds, { opacity: 0.7, zIndex: 100 });
 
     // Create Soil Layer (values mostly 1-4, 11-14)
     const soilImg = this.createPlottyLayer(this.soilData, [1, 14], 'viridis');
-    this.soilLayer = L.imageOverlay(soilImg, bounds, { opacity: 0.7, zIndex: 301 });
+    this.soilLayer = L.imageOverlay(soilImg, bounds, { opacity: 0.7, zIndex: 101 });
 
     // Create CN Layer
     const cnImg = this.createPlottyLayer(this.cnRaster, [30, 100], 'jet');
-    this.cnLayer = L.imageOverlay(cnImg, bounds, { opacity: 0.7, zIndex: 302 }).addTo(appMap);
+    const opacity = document.getElementById('cn-opacity') ? parseInt(document.getElementById('cn-opacity').value) / 100 : 0.7;
+    this.cnLayer = L.imageOverlay(cnImg, bounds, { opacity: opacity, zIndex: 102 });
+    this.cnLayer.addTo(appMap);
 
     appMap.fitBounds(bounds);
 

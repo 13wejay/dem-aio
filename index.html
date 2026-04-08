@@ -310,6 +310,13 @@
                   <input type="checkbox" id="toggle-hydro-catchment" checked>
                   <span>Catchment Polygon</span>
                 </label>
+                <div class="input-group" style="margin-top: 10px;">
+                  <label>Layer Opacity</label>
+                  <div class="range-row">
+                    <input type="range" id="hydro-opacity" min="0" max="100" value="80">
+                    <span class="range-value" id="hydro-opacity-val">80%</span>
+                  </div>
+                </div>
               </div>
 
               <div id="hydro-river-tools" style="display:none; margin-top: 15px; border-top: 1px solid var(--border); padding-top: 15px;">
@@ -339,6 +346,7 @@
                   Click anywhere on a mapped stream line to delineate its upstream catchment.
                 </div>
               </div>
+
 
             </div>
           </div>
@@ -380,6 +388,14 @@
                   <input type="checkbox" id="toggle-soil-layer">
                   <span>Show Soil Raster</span>
                 </label>
+                
+                <div class="input-group" style="margin-top: 10px;">
+                  <label>Layer Opacity</label>
+                  <div class="range-row">
+                    <input type="range" id="cn-opacity" min="0" max="100" value="70">
+                    <span class="range-value" id="cn-opacity-val">70%</span>
+                  </div>
+                </div>
               </div>
 
               <!-- CN Results Table -->
@@ -401,24 +417,6 @@
                 </div>
               </div>
               
-              <!-- Export Buttons for CN -->
-              <div id="cn-exports" style="display:none; margin-top:12px;">
-                 <h4 style="margin: 0 0 6px; font-size: 0.9em;">Export Layers (GeoTIFF)</h4>
-                 <div class="export-grid">
-                   <button class="export-btn" id="btn-export-cn">
-                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
-                     CN Raster
-                   </button>
-                   <button class="export-btn" id="btn-export-lulc">
-                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
-                     LULC
-                   </button>
-                   <button class="export-btn" id="btn-export-soil">
-                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
-                     Soil Type
-                   </button>
-                 </div>
-              </div>
             </div>
           </div>
 
@@ -449,6 +447,7 @@
               <span class="section-chevron">▾</span>
             </div>
             <div class="section-content">
+              <h4 style="margin: 0 0 6px; font-size: 0.9em;">Base DEM & Visuals</h4>
               <div class="export-grid">
                 <button class="export-btn" id="btn-export-dem" disabled>
                   <span class="export-icon"><i data-lucide="map" style="width:20px;height:20px"></i></span>
@@ -466,6 +465,52 @@
                   <span class="export-icon"><i data-lucide="camera" style="width:20px;height:20px"></i></span>
                   Screenshot (.png)
                 </button>
+              </div>
+
+              <!-- Hydrology Export -->
+              <div id="hydro-exports" style="display:none; margin-top:15px; border-top: 1px solid var(--border); padding-top:15px;">
+                 <h4 style="margin: 0 0 6px; font-size: 0.9em;">Hydrology Layers</h4>
+                 <div class="export-grid">
+                   <button class="export-btn" id="btn-export-hydro-fill">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     Filled DEM (.tif)
+                   </button>
+                   <button class="export-btn" id="btn-export-hydro-dir">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     Flow Dir (.tif)
+                   </button>
+                   <button class="export-btn" id="btn-export-hydro-acc">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     Flow Acc (.tif)
+                   </button>
+                   <button class="export-btn" id="btn-export-hydro-stream">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     Streams (.json)
+                   </button>
+                   <button class="export-btn" id="btn-export-hydro-catchment">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     Catchment (.json)
+                   </button>
+                 </div>
+              </div>
+
+              <!-- Export Buttons for CN -->
+              <div id="cn-exports" style="display:none; margin-top:15px; border-top: 1px solid var(--border); padding-top:15px;">
+                 <h4 style="margin: 0 0 6px; font-size: 0.9em;">CN & Land Cover (GeoTIFF)</h4>
+                 <div class="export-grid">
+                   <button class="export-btn" id="btn-export-cn">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     CN Raster
+                   </button>
+                   <button class="export-btn" id="btn-export-lulc">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     LULC
+                   </button>
+                   <button class="export-btn" id="btn-export-soil">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     Soil Type
+                   </button>
+                 </div>
               </div>
             </div>
           </div>
@@ -508,8 +553,43 @@
         </div>
 
         <!-- Float Map Legends -->
-        <div id="cn-map-legends" style="display:block; position:absolute; bottom:30px; right:10px; z-index:800; background:rgba(15,18,25,0.92); padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 20px rgba(0,0,0,0.4); font-size:11px; backdrop-filter:blur(12px);">
+        <div id="float-map-legends" style="display:none; position:absolute; bottom:30px; right:10px; z-index:800; background:rgba(15,18,25,0.92); padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 4px 20px rgba(0,0,0,0.4); font-size:11px; backdrop-filter:blur(12px);">
           
+          <!-- Sink Filled DEM Legend -->
+          <div id="map-legend-hydro-fill" style="display:none; margin-bottom:10px;">
+            <div style="color:var(--text-secondary); margin-bottom:4px; font-size:10px; font-family:var(--font-ui); text-transform:uppercase; letter-spacing:0.5px;">Sink Filled Elevation</div>
+            <div class="ramp-preview ramp-terrain" style="height:8px; margin-bottom:2px; border-radius:2px;"></div>
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-primary);">
+              <span>Low</span><span>High</span>
+            </div>
+          </div>
+
+          <!-- Flow Direction Legend -->
+          <div id="map-legend-hydro-dir" style="display:none; margin-bottom:10px;">
+            <div style="color:var(--text-secondary); margin-bottom:4px; font-size:10px; font-family:var(--font-ui); text-transform:uppercase; letter-spacing:0.5px;">Flow Direction (D8)</div>
+            <div class="ramp-preview ramp-jet" style="height:8px; margin-bottom:2px; border-radius:2px;"></div>
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-primary);">
+              <span>1 (E)</span><span>128 (NE)</span>
+            </div>
+          </div>
+
+          <!-- Flow Accumulation Legend -->
+          <div id="map-legend-hydro-acc" style="display:none; margin-bottom:10px;">
+            <div style="color:var(--text-secondary); margin-bottom:4px; font-size:10px; font-family:var(--font-ui); text-transform:uppercase; letter-spacing:0.5px;">Flow Accumulation (Log)</div>
+            <div class="ramp-preview ramp-jet" style="height:8px; margin-bottom:2px; border-radius:2px;"></div>
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-primary);">
+              <span>Low</span><span>High</span>
+            </div>
+          </div>
+
+          <!-- Stream Network Legend -->
+          <div id="map-legend-hydro-stream" style="display:none; margin-bottom:10px;">
+            <div style="color:var(--text-secondary); margin-bottom:4px; font-size:10px; font-family:var(--font-ui); text-transform:uppercase; letter-spacing:0.5px;">Stream Order Output</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px; color:var(--text-primary);">
+              <div style="display:flex; align-items:center;"><span style="display:inline-block; width:15px; height:1.5px; background:#3388ff; margin-right:4px;"></span>Low Order</div>
+              <div style="display:flex; align-items:center;"><span style="display:inline-block; width:15px; height:6px; background:#3388ff; margin-right:4px;"></span>High Order</div>
+            </div>
+          </div>
           <!-- CN Legend -->
           <div id="map-legend-cn" style="display:none; margin-bottom:10px;">
             <div style="color:var(--text-secondary); margin-bottom:4px; font-size:10px; font-family:var(--font-ui); text-transform:uppercase; letter-spacing:0.5px;">Curve Number</div>

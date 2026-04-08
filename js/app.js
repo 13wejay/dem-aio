@@ -87,6 +87,17 @@ DEM.app = (function () {
           throw new Error('Unsupported format. Need .zip (Shapefile) or .geojson');
         }
 
+        // Normalize GeoJSON (handle arrays of FeatureCollections from shpjs or multiple polygons)
+        let features = [];
+        const extractFeatures = (gj) => {
+          if (Array.isArray(gj)) gj.forEach(extractFeatures);
+          else if (gj.type === 'FeatureCollection') (gj.features || []).forEach(extractFeatures);
+          else if (gj.type === 'Feature') features.push(gj);
+          else if (gj.type) features.push({ type: 'Feature', properties: {}, geometry: gj });
+        };
+        extractFeatures(geojson);
+        geojson = { type: 'FeatureCollection', features: features };
+
         const bbox = DEM.mapModule.drawUploadedBoundary(geojson);
         if (bbox) {
           state.bbox = bbox;

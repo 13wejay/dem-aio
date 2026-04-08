@@ -51,23 +51,59 @@ DEM.hydro = (function () {
     document.getElementById('toggle-hydro-acc')?.addEventListener('change', (e) => toggleLayer('acc', e.target.checked));
     document.getElementById('toggle-hydro-stream')?.addEventListener('change', (e) => toggleLayer('stream', e.target.checked));
     document.getElementById('toggle-hydro-catchment')?.addEventListener('change', (e) => toggleLayer('catchment', e.target.checked));
+
+    // Opacity
+    document.getElementById('hydro-opacity')?.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+      document.getElementById('hydro-opacity-val').textContent = val + '%';
+      setHydroOpacity(val / 100);
+    });
+
+    // Exports
+    document.getElementById('btn-export-hydro-fill')?.addEventListener('click', () => exportHydroGeoTIFF('filled_dem', hydroState.fillRaster));
+    document.getElementById('btn-export-hydro-dir')?.addEventListener('click', () => exportHydroGeoTIFF('flow_direction', hydroState.dirRaster));
+    document.getElementById('btn-export-hydro-acc')?.addEventListener('click', () => exportHydroGeoTIFF('flow_accumulation', hydroState.accRaster));
+    document.getElementById('btn-export-hydro-stream')?.addEventListener('click', () => exportHydroGeoJSON('stream_network', hydroState.streamsGeoJSON));
+    document.getElementById('btn-export-hydro-catchment')?.addEventListener('click', () => exportHydroGeoJSON('catchment', hydroState.catchmentGeoJSON));
+  }
+
+  function setHydroOpacity(opacity) {
+    if (hydroState.fillLayer) hydroState.fillLayer.setOpacity(opacity);
+    if (hydroState.dirLayer) hydroState.dirLayer.setOpacity(opacity);
+    if (hydroState.accLayer) hydroState.accLayer.setOpacity(opacity);
+    if (hydroState.catchmentLayer) hydroState.catchmentLayer.setOpacity(opacity);
+    if (hydroState.streamLayer) {
+      hydroState.streamLayer.setStyle({ opacity: opacity });
+    }
   }
 
   function toggleLayer(type, show) {
     const appMap = DEM.mapModule.getMap();
     let layer = null;
-    if (type === 'fill') layer = hydroState.fillLayer;
-    if (type === 'dir') layer = hydroState.dirLayer;
-    if (type === 'acc') layer = hydroState.accLayer;
-    if (type === 'stream') layer = hydroState.streamLayer;
+    let legendId = null;
+
+    if (type === 'fill') { layer = hydroState.fillLayer; legendId = 'map-legend-hydro-fill'; }
+    if (type === 'dir') { layer = hydroState.dirLayer; legendId = 'map-legend-hydro-dir'; }
+    if (type === 'acc') { layer = hydroState.accLayer; legendId = 'map-legend-hydro-acc'; }
+    if (type === 'stream') { layer = hydroState.streamLayer; legendId = 'map-legend-hydro-stream'; }
     if (type === 'catchment') layer = hydroState.catchmentLayer;
 
-    if (!layer) return;
+    if (!layer && type !== 'stream' && type !== 'catchment') return; // Stream and catchment wait for extraction, handle safely gracefully
 
-    if (show) {
-      if (!appMap.hasLayer(layer)) layer.addTo(appMap);
-    } else {
-      if (appMap.hasLayer(layer)) appMap.removeLayer(layer);
+    const legendsBox = document.getElementById('float-map-legends');
+    if (legendsBox) legendsBox.style.display = 'block';
+
+    if (legendId) {
+      const legendEl = document.getElementById(legendId);
+      if (legendEl) legendEl.style.display = show ? 'block' : 'none';
+    }
+
+    if (layer) {
+      if (show) {
+        if (!appMap.hasLayer(layer)) layer.addTo(appMap);
+      } else {
+        if (appMap.hasLayer(layer)) appMap.removeLayer(layer);
+      }
     }
   }
 
@@ -133,6 +169,14 @@ DEM.hydro = (function () {
     document.getElementById('hydro-layer-toggles').style.display = 'block';
     toolsRiver.style.display = 'block';
     toolsWatershed.style.display = 'block';
+    
+    // Show hydro exports and enable base grid buttons
+    const hydroExports = document.getElementById('hydro-exports');
+    if (hydroExports) hydroExports.style.display = 'block';
+    
+    document.getElementById('btn-export-hydro-fill').disabled = false;
+    document.getElementById('btn-export-hydro-dir').disabled = false;
+    document.getElementById('btn-export-hydro-acc').disabled = false;
 
     setTimeout(() => {
       updateProgress(-1);
@@ -148,6 +192,10 @@ DEM.hydro = (function () {
       document.getElementById('toggle-hydro-acc').checked = true;
       document.getElementById('toggle-hydro-stream').checked = true;
       document.getElementById('toggle-hydro-catchment').checked = true;
+      
+      toggleLayer('fill', false);
+      toggleLayer('dir', false);
+      toggleLayer('acc', true);
     }, 500);
   }
 
@@ -174,9 +222,12 @@ DEM.hydro = (function () {
         plot.render();
     }
     
-    const appMap = DEM.mapModule.getMap();
-    if (hydroState.fillLayer) appMap.removeLayer(hydroState.fillLayer);
-    hydroState.fillLayer = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: 0.8, zIndex: 298 });
+    if (hydroState.fillLayer) {
+        const opacity = parseInt(document.getElementById('hydro-opacity').value) / 100;
+        hydroState.fillLayer = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: opacity, zIndex: 298 });
+    } else {
+        hydroState.fillLayer = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: 0.8, zIndex: 298 });
+    }
     // Not added to map initially
   }
 
@@ -194,9 +245,12 @@ DEM.hydro = (function () {
         plot.render();
     }
     
-    const appMap = DEM.mapModule.getMap();
-    if (hydroState.dirLayer) appMap.removeLayer(hydroState.dirLayer);
-    hydroState.dirLayer = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: 0.8, zIndex: 299 });
+    if (hydroState.dirLayer) {
+        const opacity = parseInt(document.getElementById('hydro-opacity').value) / 100;
+        hydroState.dirLayer = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: opacity, zIndex: 299 });
+    } else {
+        hydroState.dirLayer = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: 0.8, zIndex: 299 });
+    }
     // Not added to map initially
   }
 
@@ -212,8 +266,26 @@ DEM.hydro = (function () {
         let idx = r * w + c;
         if (dem[idx] === nodata || isNaN(dem[idx])) {
           filled[idx] = nodata;
-        } else if (r === 0 || r === h - 1 || c === 0 || c === w - 1) {
-          filled[idx] = dem[idx];
+        } else {
+          // If cell is on the raster edge OR touches a nodata cell, it's an outlet
+          let isBoundary = false;
+          if (r === 0 || r === h - 1 || c === 0 || c === w - 1) {
+            isBoundary = true;
+          } else {
+            // Check 8-neighbors
+            for (let d = 0; d < 8; d++) {
+              let nr = r + DROW[d];
+              let nc = c + DCOL[d];
+              let nIdx = nr * w + nc;
+              if (dem[nIdx] === nodata || isNaN(dem[nIdx])) {
+                isBoundary = true;
+                break;
+              }
+            }
+          }
+          if (isBoundary) {
+            filled[idx] = dem[idx];
+          }
         }
       }
     }
@@ -426,10 +498,12 @@ DEM.hydro = (function () {
         plot.render();
     }
     
-    const appMap = DEM.mapModule.getMap();
-    if (hydroState.accLayer) appMap.removeLayer(hydroState.accLayer);
-    
-    hydroState.accLayer = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: 0.8, zIndex: 300 });
+    if (hydroState.accLayer) {
+        const opacity = parseInt(document.getElementById('hydro-opacity').value) / 100;
+        hydroState.accLayer = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: opacity, zIndex: 300 });
+    } else {
+        hydroState.accLayer = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: 0.8, zIndex: 300 });
+    }
     if (document.getElementById('toggle-hydro-acc').checked) {
       hydroState.accLayer.addTo(appMap);
     }
@@ -452,18 +526,11 @@ DEM.hydro = (function () {
     // 1. Identify stream cells map
     const streamMap = new Uint8Array(size);
     for (let i = 0; i < size; i++) {
-      if (accRaster[i] >= thresh) {
+      if (accRaster[i] >= thresh && dirRaster[i] > 0) {
         streamMap[i] = 1;
       }
     }
 
-    // 2. Build stream topology and classify order
-    // (This is a simplified grid-based tracing approach)
-    let features = [];
-    
-    // We need to trace segments. A segment ends at a confluence or outlet.
-    const visited = new Uint8Array(size);
-    
     // Helper to get next cell
     const getNext = (r, c, d) => {
       let nr = r, nc = c;
@@ -474,69 +541,80 @@ DEM.hydro = (function () {
       return -1;
     };
 
-    // Calculate Strahler order requires bottom-up approach (from sources down)
-    // To do this properly, we iterate all stream cells and trace them.
-    // In this app, for speed, we generate lines directly from cells 
-    // and visualize them without full topological segment sorting if it's too complex.
-    // But we can approximate order by accumulating order dynamically.
-    
-    const streamOrder = new Int16Array(size);
-    // Find heads: Stream cells with 0 upstream stream cells
-    const heads = [];
-    for (let r=0; r<height; r++) {
-      for(let c=0; c<width; c++) {
+    // 2. Build stream topology and classify order using topological sort
+    const inDegree = new Int32Array(size);
+    for (let r = 0; r < height; r++) {
+      for (let c = 0; c < width; c++) {
         let idx = r * width + c;
-        if(streamMap[idx] === 1) {
-           let hasUpstream = false;
-           // Check all 8 neighbors if they flow into this and are streams
-           for(let d=0; d<8; d++) {
-             let nr = r + DROW[d]; let nc = c + DCOL[d];
-             if(nr>=0 && nr<height && nc>=0 && nc<width) {
-               let nIdx = nr * width + nc;
-               if(streamMap[nIdx] === 1) {
-                 let nDir = dirRaster[nIdx];
-                 let nToR = nr, nToC = nc;
-                 if (nDir===128) {nToR--; nToC++;} else if (nDir===64) {nToR--;} else if (nDir===32) {nToR--; nToC--;}
-                 else if (nDir===16) {nToC--;} else if (nDir===8) {nToR++; nToC--;} else if (nDir===4) {nToR++;}
-                 else if (nDir===2) {nToR++; nToC++;} else if (nDir===1) {nToC++;}
-                 if(nToR === r && nToC === c) {
-                   hasUpstream = true; break;
-                 }
-               }
-             }
-           }
-           if(!hasUpstream) heads.push(idx);
+        if (streamMap[idx] === 1) {
+          let nIdx = getNext(r, c, dirRaster[idx]);
+          if (nIdx !== -1 && streamMap[nIdx] === 1) {
+            inDegree[nIdx]++;
+          }
         }
       }
     }
 
-    // A simplified stream segment tracing
-    // Extracting full Strahler topology is complex. 
-    // Instead we'll trace from heads down, merging orders.
-    // We will just create MultiLineString where thickness depends on Accumulation, 
-    // simulating stream ordering visually!
+    const upstreamMaxOrder = new Int32Array(size);
+    const upstreamMaxCount = new Int32Array(size);
+    const streamOrder = new Int32Array(size);
     
-    for (let r=0; r<height; r++) {
-       for(let c=0; c<width; c++) {
-         let idx = r*width + c;
+    let queue = [];
+    for (let i = 0; i < size; i++) {
+      if (streamMap[i] === 1 && inDegree[i] === 0) {
+        queue.push(i);
+        streamOrder[i] = 1; // Heads
+      }
+    }
+
+    let head = 0;
+    while (head < queue.length) {
+      let idx = queue[head++];
+      let currentOrder = streamOrder[idx];
+      let r = Math.floor(idx / width), c = idx % width;
+      let nIdx = getNext(r, c, dirRaster[idx]);
+      
+      if (nIdx !== -1 && streamMap[nIdx] === 1) {
+        if (orderMethod === 'strahler') {
+          if (currentOrder > upstreamMaxOrder[nIdx]) {
+            upstreamMaxOrder[nIdx] = currentOrder;
+            upstreamMaxCount[nIdx] = 1;
+          } else if (currentOrder === upstreamMaxOrder[nIdx]) {
+            upstreamMaxCount[nIdx]++;
+          }
+        } else {
+          // Shreve: sum of incoming magnitudes
+          streamOrder[nIdx] += currentOrder;
+        }
+
+        inDegree[nIdx]--;
+        if (inDegree[nIdx] === 0) {
+          if (orderMethod === 'strahler') {
+            streamOrder[nIdx] = upstreamMaxCount[nIdx] >= 2 ? upstreamMaxOrder[nIdx] + 1 : upstreamMaxOrder[nIdx];
+          }
+          queue.push(nIdx);
+        }
+      }
+    }
+
+    // 3. Generate GeoJSON segments
+    let features = [];
+    for (let r = 0; r < height; r++) {
+       for(let c = 0; c < width; c++) {
+         let idx = r * width + c;
          if (streamMap[idx] === 1) {
            let nIdx = getNext(r, c, dirRaster[idx]);
            if (nIdx !== -1 && streamMap[nIdx] === 1) {
              let r2 = Math.floor(nIdx / width);
              let c2 = nIdx % width;
-             
              let lon1 = transform.originX + c * transform.pixelWidth;
              let lat1 = transform.originY + r * transform.pixelHeight;
              let lon2 = transform.originX + c2 * transform.pixelWidth;
              let lat2 = transform.originY + r2 * transform.pixelHeight;
              
-             // Pseudo-order based on accumulation vs threshold
-             // Log scale it
-             let order = Math.floor(Math.log10(accRaster[idx] / thresh)) + 1;
-             
              features.push({
                type: "Feature",
-               properties: { "order": order, "acc": accRaster[idx] },
+               properties: { "order": streamOrder[idx], "acc": accRaster[idx], "method": orderMethod },
                geometry: {
                  type: "LineString",
                  coordinates: [[lon1, lat1], [lon2, lat2]]
@@ -552,22 +630,33 @@ DEM.hydro = (function () {
     const appMap = DEM.mapModule.getMap();
     if (hydroState.streamLayer) appMap.removeLayer(hydroState.streamLayer);
 
+    const opacity = document.getElementById('hydro-opacity') ? parseInt(document.getElementById('hydro-opacity').value) / 100 : 0.9;
+    
     hydroState.streamLayer = L.geoJSON(hydroState.streamsGeoJSON, {
       style: function(f) {
+        let w = 1;
+        if (f.properties.method === 'strahler') {
+           w = f.properties.order * 1.5;
+        } else {
+           w = Math.max(1, Math.log2(f.properties.order) * 1.5);
+        }
         return { 
           color: '#3388ff', 
-          weight: Math.min(6, Math.max(1, f.properties.order * 1.5)), 
-          opacity: 0.9 
+          weight: Math.min(6, Math.max(1, w)), 
+          opacity: opacity 
         };
       }
     });
 
     if (document.getElementById('toggle-hydro-stream').checked) {
       hydroState.streamLayer.addTo(appMap);
+      toggleLayer('stream', true); // Force legend refresh
     }
     
+    
     DEM.utils.hideLoading();
-    DEM.utils.toast('Stream network generated', 'success');
+    document.getElementById('btn-export-hydro-stream').disabled = false;
+    DEM.utils.toast(`Stream network generated (${orderMethod === 'shreve' ? 'Shreve' : 'Strahler'})`, 'success');
   }
 
   function togglePourPointMode() {
@@ -681,37 +770,101 @@ DEM.hydro = (function () {
   }
 
   function renderCatchmentPolygon(mask, width, height, transform, areaCells) {
-    // A quick way to render catchment mask: Generate an Image overlay or Contour polygon
-    // To make a true GeoJSON polygon, we need a marching squares implementation.
-    // For simplicity, we draw the mask to a canvas and use image overlay.
-    // Or, for high quality vector, maybe D3-contour or simple pixel to geoJSON.
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext('2d');
     const imgData = ctx.createImageData(width, height);
+    
+    // Generate simple GeoJSON MultiPolygon representation for export
+    let geojsonPolys = [];
+    
     for(let i=0; i<mask.length; i++) {
         if(mask[i] === 1) {
             imgData.data[i*4 + 0] = 50;
             imgData.data[i*4 + 1] = 150;
             imgData.data[i*4 + 2] = 255;
             imgData.data[i*4 + 3] = 100; // Alpha
+            
+            let r = Math.floor(i / width);
+            let c = i % width;
+            let wLng = transform.originX + c*transform.pixelWidth;
+            let eLng = transform.originX + (c+1)*transform.pixelWidth;
+            let nLat = transform.originY + r*transform.pixelHeight;
+            let sLat = transform.originY + (r+1)*transform.pixelHeight;
+            geojsonPolys.push([[[wLng, nLat], [eLng, nLat], [eLng, sLat], [wLng, sLat], [wLng, nLat]]]);
         }
     }
     ctx.putImageData(imgData, 0, 0);
+
+    hydroState.catchmentGeoJSON = {
+      type: "FeatureCollection",
+      features: [{
+        type: "Feature",
+        properties: { "areaCells": areaCells },
+        geometry: { type: "MultiPolygon", coordinates: geojsonPolys }
+      }]
+    };
 
     const bounds = [[hydroState.bbox.south, hydroState.bbox.west], [hydroState.bbox.north, hydroState.bbox.east]];
     const appMap = DEM.mapModule.getMap();
     if(hydroState.catchmentLayer) appMap.removeLayer(hydroState.catchmentLayer);
     
-    hydroState.catchmentLayer = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: 0.8, zIndex: 302, interactive:false });
+    const currentOpacity = parseInt(document.getElementById('hydro-opacity').value) / 100;
+    hydroState.catchmentLayer = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: currentOpacity, zIndex: 302, interactive:false });
     
     if (document.getElementById('toggle-hydro-catchment').checked) {
       hydroState.catchmentLayer.addTo(appMap);
     }
     
     const approxKm2 = (areaCells * Math.abs(transform.pixelWidth * 111) * Math.abs(transform.pixelHeight * 111)).toFixed(2);
+    document.getElementById('btn-export-hydro-catchment').disabled = false;
     DEM.utils.toast(`Catchment Delineated (approx ${approxKm2} km²)`, 'success');
+  }
+
+  async function exportHydroGeoTIFF(name, arrayData) {
+    if (!arrayData) {
+      DEM.utils.toast(`No data available for ${name}. Generate first!`, 'error');
+      return;
+    }
+    
+    DEM.utils.showLoading(`Exporting ${name}...`);
+    try {
+      const { width, height, bbox } = hydroState;
+      const dx = (bbox.east - bbox.west) / width;
+      const dy = (bbox.north - bbox.south) / height;
+
+      const metadata = {
+        width: width,
+        height: height,
+        GeographicTypeGeoKey: 4326,
+        ModelPixelScale: [dx, Math.abs(dy), 0],
+        ModelTiepoint: [0, 0, 0, bbox.west, bbox.north, 0],
+        GDAL_NODATA: String(hydroState.nodata)
+      };
+
+      const arrayBuffer = await GeoTIFF.writeArrayBuffer(arrayData, metadata);
+      const blob = new Blob([arrayBuffer], { type: 'image/tiff' });
+      
+      DEM.utils.hideLoading();
+      DEM.utils.downloadBlob(blob, `dem_${name}.tif`);
+      DEM.utils.toast(`Exported ${name}.tif`, 'success');
+    } catch (err) {
+      console.error(err);
+      DEM.utils.hideLoading();
+      DEM.utils.toast(`Failed to export ${name}: ${err.message}`, 'error');
+    }
+  }
+
+  function exportHydroGeoJSON(name, geojsonData) {
+    if (!geojsonData) {
+      DEM.utils.toast(`No vector generated for ${name}`, 'error');
+      return;
+    }
+    const str = JSON.stringify(geojsonData);
+    const blob = new Blob([str], { type: 'application/json' });
+    DEM.utils.downloadBlob(blob, `dem_${name}.geojson`);
+    DEM.utils.toast(`Exported ${name}.geojson`, 'success');
   }
 
   return { init };
