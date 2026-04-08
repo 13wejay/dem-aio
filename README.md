@@ -5,23 +5,25 @@ A web-based Digital Elevation Model (DEM) viewer and processor. DEM Explorer all
 ## Features
 
 - **Interactive Map Selection**: Draw bounding boxes directly on the map or input coordinates manually.
+- **Custom Boundary Clipping**: Upload **Shapefiles (.zip)** or **GeoJSON** files. The app automatically computes the bounding box and will natively clip (mask) the downloaded DEM raster to perfectly match your geometry using client-side canvas processing!
 - **Multiple DEM Sources**:
-  - Copernicus GLO-30 (~30m resolution, global, no auth required)
-  - SRTM GL1 (~30m resolution, global ±60°, requires OpenTopography API key)
-  - ALOS AW3D30 (~30m resolution, global, requires OpenTopography API key)
-  - HydroSHEDS (~90m resolution, hydrological DEM, no auth required)
+  - Copernicus GLO-30 (~30m resolution, global, true cloud-optimized)
+  - Copernicus GLO-90 (~90m resolution, global, cloud-optimized)
+  - SRTM GL1 (~30m resolution, global ±60°)
+  - ALOS AW3D30 (~30m resolution, global)
+  - NASADEM (~30m resolution, global)
+  - GEBCO (~500m resolution, global bathymetry)
 - **Advanced In-Browser Visualization**:
   - **Elevation Map**: Apply different color ramps (Viridis, Terrain, Jet, Grayscale) with opacity controls.
+  - **GPU Acceleration**: Utilizes `plotty.js` for extremely fast WebGL color scale rendering.
   - **Hillshade**: Compute dynamic hillshading with adjustable sun azimuth, altitude, z-factor, and elevation blending.
-  - **Contours**: Generate contour lines at custom intervals with adjustable styles and labels.
+  - **Contours**: Generate contour lines at custom intervals using the marching squares algorithm, with adjustable styles and labels.
 - **Statistics**: Instantly view min, max, mean, median, standard deviation, and histograms of the selected region.
-- **Exports**: Export processed outputs including raw DEM data, PNG hillshades/screenshots, and GeoJSON contour lines.
+- **Exports**: Direct export capability to standard **GeoTIFF (.tif)**, visually styled PNGs, and GeoJSON contour lines directly to your local file system via the local dev server.
 
 ## How It Works
 
-This application is designed to be lightweight and serverless-friendly. All heavy geospatial processing (GeoTIFF parsing, hillshade computation, marching squares contour generation, and statistics calculation) runs **entirely client-side in the browser** using JavaScript and HTML5 Canvas, eliminating the need for a complex Python/GDAL backend.
-
-## Local Development Setup
+This application is designed to be lightweight and serverless-friendly. All heavy geospatial processing—including Shapefile vector parsing (`shpjs`), GeoTIFF raster reading, hillshade computation, contour generation, and polygon geometric clipping—runs **entirely client-side in the browser** using JavaScript and standard canvas/WebGL technologies.
 
 To run DEM Explorer locally, you just need Node.js installed to serve the static files and handle the proxy for overcoming CORS restrictions.
 
@@ -40,15 +42,6 @@ To run DEM Explorer locally, you just need Node.js installed to serve the static
 
 3. **Open your browser:**
    Navigate to `http://localhost:3000`
-
-### API Keys Configuration (Optional)
-
-If you want to use SRTM or ALOS DEM sources, you need a free OpenTopography API key.
-1. Create a `.env` file in the project root:
-   ```env
-   OPENTOPO_API_KEY=your_api_key_here
-   ```
-2. Alternatively, you can configure the API key directly in the web app UI using the Settings (⚙) icon.
 
 ## Deployment
 
