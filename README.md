@@ -47,12 +47,15 @@ To run DEM Explorer locally, you just need Node.js installed to serve the static
 
 This app is architected specifically to be deployed on platforms like **Vercel** with zero configuration required. The `api/proxy.js` acts as an Edge Function to handle CORS for DEM tile downloads, while the rest are purely static files.
 
-## Built With
+## Built With & Attributions
 
 - [Leaflet](https://leafletjs.com/) - Interactive map foundation
 - [geotiff.js](https://geotiffjs.github.io/) - In-browser GeoTIFF parsing
-- [plotty](https://github.com/santilland/plotty) - Raster colorization
+- [plotty.js](https://github.com/santilland/plotty) - GPU Raster colorization
+- [shpjs](https://github.com/calvinmetcalf/shapefile-js) - Client-side vector boundary parsing
 - [Lucide](https://lucide.dev/) - UI Icons
+
+**Important:** Users generating data with this tool are subject to the attribution guidelines of the original dataset providers (NASA, ESA, JAXA, etc.). Please see the **[ATTRIBUTIONS.md](ATTRIBUTIONS.md)** file for a full list of required citations and open-source library licenses.
 
 ## Author
 
