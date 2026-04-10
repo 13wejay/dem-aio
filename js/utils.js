@@ -214,5 +214,26 @@ DEM.utils = {
   hideProgress() {
     const container = document.getElementById('download-progress');
     container.classList.remove('visible');
+  },
+
+  /* --- Local Progress bars --- */
+  showLocalProgress(idPrefix, status) {
+    const container = document.getElementById(idPrefix);
+    const fill = document.getElementById(idPrefix + '-fill');
+    const statusEl = document.getElementById(idPrefix + '-status');
+    if (!container) return;
+    container.style.display = 'block';
+    if(fill) { fill.classList.add('indeterminate'); fill.style.width = ''; }
+    if(statusEl) statusEl.textContent = status || 'Processing...';
+  },
+  updateLocalProgress(idPrefix, percent, status) {
+    const fill = document.getElementById(idPrefix + '-fill');
+    const statusEl = document.getElementById(idPrefix + '-status');
+    if(fill) { fill.classList.remove('indeterminate'); fill.style.width = percent + '%'; }
+    if (status && statusEl) statusEl.textContent = status;
+  },
+  hideLocalProgress(idPrefix) {
+    const container = document.getElementById(idPrefix);
+    if(container) container.style.display = 'none';
   }
 };

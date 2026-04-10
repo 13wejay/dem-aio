@@ -12,6 +12,10 @@ DEM.mapModule = (function () {
   let hillshadeOverlay = null;
   let contourLayer = null;
   let uploadedBoundaryLayer = null;
+  
+  let satelliteOverlay = null;
+  let waterMaskOverlay = null;
+  let floodMaskOverlay = null;
 
   /* --- Initialize Map --- */
   function init() {
@@ -282,6 +286,136 @@ DEM.mapModule = (function () {
     if (elevationOverlay) { map.removeLayer(elevationOverlay); elevationOverlay = null; }
     if (hillshadeOverlay) { map.removeLayer(hillshadeOverlay); hillshadeOverlay = null; }
     if (contourLayer) { map.removeLayer(contourLayer); contourLayer = null; }
+    if (satelliteOverlay) { map.removeLayer(satelliteOverlay); satelliteOverlay = null; }
+    if (waterMaskOverlay) { map.removeLayer(waterMaskOverlay); waterMaskOverlay = null; }
+    if (floodMaskOverlay) { map.removeLayer(floodMaskOverlay); floodMaskOverlay = null; }
+  }
+
+  /* --- Satellite & Flood Rendering --- */
+  function renderSatellite(imageData, platform) {
+    if (!imageData) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = imageData.width;
+    canvas.height = imageData.height;
+    const ctx = canvas.getContext('2d');
+    const outData = ctx.createImageData(canvas.width, canvas.height);
+    
+    if (platform === 'sentinel-2-l2a' && imageData.rgb) {
+      // Find 98th percentile for stretching
+      let maxR = 1, maxG = 1, maxB = 1;
+      let count = imageData.width * imageData.height;
+      let sample = Math.floor(count / 1000);
+      let rMaxs = [], gMaxs = [], bMaxs = [];
+      for(let i=0; i<count; i+=sample) {
+          rMaxs.push(imageData.rgb[0][i]);
+          gMaxs.push(imageData.rgb[1][i]);
+          bMaxs.push(imageData.rgb[2][i]);
+      }
+      rMaxs.sort((a,b)=>a-b); gMaxs.sort((a,b)=>a-b); bMaxs.sort((a,b)=>a-b);
+      maxR = rMaxs[Math.floor(rMaxs.length*0.98)] || 10000;
+      maxG = gMaxs[Math.floor(gMaxs.length*0.98)] || 10000;
+      maxB = bMaxs[Math.floor(bMaxs.length*0.98)] || 10000;
+
+      for (let i = 0; i < count; i++) {
+        let r = Math.min(255, (imageData.rgb[0][i] / maxR) * 255);
+        let g = Math.min(255, (imageData.rgb[1][i] / maxG) * 255);
+        let b = Math.min(255, (imageData.rgb[2][i] / maxB) * 255);
+        outData.data[i*4] = r;
+        outData.data[i*4+1] = g;
+        outData.data[i*4+2] = b;
+        outData.data[i*4+3] = 255;
+      }
+    } else if (platform === 'sentinel-1-grd' && imageData.vh) {
+      let count = imageData.width * imageData.height;
+      let sample = Math.floor(count / 1000);
+      let vhMaxs = [];
+      for(let i=0; i<count; i+=sample) {
+        if(imageData.vh[i] > 0) vhMaxs.push(imageData.vh[i]);
+      }
+      vhMaxs.sort((a,b)=>a-b);
+      let maxVH = vhMaxs[Math.floor(vhMaxs.length*0.95)] || 1;
+      
+      for (let i = 0; i < count; i++) {
+        let v = 0;
+        if (imageData.vh[i] > 0) {
+           v = Math.min(255, (imageData.vh[i] / maxVH) * 255);
+        }
+        outData.data[i*4] = v;
+        outData.data[i*4+1] = v;
+        outData.data[i*4+2] = v;
+        outData.data[i*4+3] = 255;
+      }
+    }
+    ctx.putImageData(outData, 0, 0);
+    const bounds = getLeafletBounds(imageData.bbox);
+    if (satelliteOverlay) { map.removeLayer(satelliteOverlay); }
+    satelliteOverlay = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: 0.8, interactive: false }).addTo(map);
+  }
+
+  function renderWaterMask(mask, width, height, bbox) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    const outData = ctx.createImageData(width, height);
+    for(let i=0; i<mask.length; i++) {
+      if(mask[i] === 1) {
+        outData.data[i*4] = 0;
+        outData.data[i*4+1] = 100;
+        outData.data[i*4+2] = 255;
+        outData.data[i*4+3] = 180;
+      }
+    }
+    ctx.putImageData(outData, 0, 0);
+    const bounds = getLeafletBounds(bbox);
+    if (waterMaskOverlay) { map.removeLayer(waterMaskOverlay); }
+    waterMaskOverlay = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: 0.8, interactive: false }).addTo(map);
+  }
+
+  function renderFloodMask(mask, width, height, bbox) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    const outData = ctx.createImageData(width, height);
+    for(let i=0; i<mask.length; i++) {
+      if (mask[i] === 1) {
+        outData.data[i*4] = 255; // highlight flood in bright cyan/blue
+        outData.data[i*4+1] = 0;
+        outData.data[i*4+2] = 0;
+        outData.data[i*4+3] = 150;
+      }
+    }
+    ctx.putImageData(outData, 0, 0);
+    const bounds = getLeafletBounds(bbox);
+    if (floodMaskOverlay) { map.removeLayer(floodMaskOverlay); }
+    floodMaskOverlay = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: 0.8, interactive: false }).addTo(map);
+  }
+
+  function toggleSatelliteLayer(layerName, show) {
+     let layer;
+     if (layerName === 'image') layer = satelliteOverlay;
+     else if (layerName === 'water') layer = waterMaskOverlay;
+     else if (layerName === 'flood') layer = floodMaskOverlay;
+     
+     if (!layer) return;
+     if (show && !map.hasLayer(layer)) map.addLayer(layer);
+     else if (!show && map.hasLayer(layer)) map.removeLayer(layer);
+  }
+
+  function setSatelliteOpacity(opacity) {
+     if (satelliteOverlay) satelliteOverlay.setOpacity(opacity);
+     if (waterMaskOverlay) waterMaskOverlay.setOpacity(opacity);
+     if (floodMaskOverlay) floodMaskOverlay.setOpacity(opacity);
+  }
+
+  function getSatelliteCanvas() {
+     if (!satelliteOverlay) return null;
+     const img = satelliteOverlay.getElement();
+     const canvas = document.createElement('canvas');
+     canvas.width = img.width; canvas.height = img.height;
+     canvas.getContext('2d').drawImage(img, 0, 0);
+     return canvas;
   }
 
   function getLeafletBounds(bbox) {
@@ -299,6 +433,7 @@ DEM.mapModule = (function () {
     setHillshadeOverlay, showHillshade,
     setContourLayer, showContours,
     removeAllOverlays, getLeafletBounds,
+    renderSatellite, renderWaterMask, renderFloodMask, toggleSatelliteLayer, setSatelliteOpacity, getSatelliteCanvas,
     getMap: () => map
   };
 })();

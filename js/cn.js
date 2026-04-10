@@ -72,6 +72,33 @@ const cnCalculator = {
     document.getElementById('btn-export-cn')?.addEventListener('click', () => this.exportRaster(this.cnRaster, 'cn_raster.tif'));
     document.getElementById('btn-export-lulc')?.addEventListener('click', () => this.exportRaster(this.lulcData, 'lulc_raster.tif'));
     document.getElementById('btn-export-soil')?.addEventListener('click', () => this.exportRaster(this.soilData, 'soil_raster.tif'));
+
+    // Sortable JS Initialization for Layer Ordering
+    const cnLayerList = document.getElementById('cn-layer-list');
+    if (cnLayerList && typeof Sortable !== 'undefined') {
+      new Sortable(cnLayerList, {
+        handle: '.drag-handle',
+        animation: 150,
+        onEnd: () => this.updateLayerZIndices()
+      });
+    }
+  },
+
+  updateLayerZIndices: function() {
+    const listItems = document.querySelectorAll('#cn-layer-list input[type="checkbox"]');
+    let baseZ = 150; // Place above base layers but below hydro/menus
+    listItems.forEach(input => {
+      const type = input.id.replace('toggle-', '').replace('-layer', '');
+      let layer = null;
+      if (type === 'cn') layer = this.cnLayer;
+      if (type === 'lulc') layer = this.lulcLayer;
+      if (type === 'soil') layer = this.soilLayer;
+      
+      if (layer && layer.setZIndex) {
+        layer.setZIndex(baseZ);
+      }
+      baseZ--;
+    });
   },
 
   toggleLayer: function(type, show) {
@@ -93,6 +120,7 @@ const cnCalculator = {
         const opacity = document.getElementById('cn-opacity') ? parseInt(document.getElementById('cn-opacity').value) / 100 : 0.7;
         layer.setOpacity(opacity);
         layer.addTo(appMap);
+        this.updateLayerZIndices();
       }
       document.getElementById(legendId).style.display = 'block';
     } else {
@@ -410,16 +438,16 @@ const cnCalculator = {
 
     // Create LULC Layer
     const lulcImg = this.createPlottyLayer(this.lulcData, [10, 100], 'esa-lulc');
-    this.lulcLayer = L.imageOverlay(lulcImg, bounds, { opacity: 0.7, zIndex: 100 });
+    this.lulcLayer = L.imageOverlay(lulcImg, bounds, { opacity: 0.7 });
 
     // Create Soil Layer (values mostly 1-4, 11-14)
     const soilImg = this.createPlottyLayer(this.soilData, [1, 14], 'viridis');
-    this.soilLayer = L.imageOverlay(soilImg, bounds, { opacity: 0.7, zIndex: 101 });
+    this.soilLayer = L.imageOverlay(soilImg, bounds, { opacity: 0.7 });
 
     // Create CN Layer
     const cnImg = this.createPlottyLayer(this.cnRaster, [30, 100], 'jet');
     const opacity = document.getElementById('cn-opacity') ? parseInt(document.getElementById('cn-opacity').value) / 100 : 0.7;
-    this.cnLayer = L.imageOverlay(cnImg, bounds, { opacity: opacity, zIndex: 102 });
+    this.cnLayer = L.imageOverlay(cnImg, bounds, { opacity: opacity });
     this.cnLayer.addTo(appMap);
 
     appMap.fitBounds(bounds);
@@ -428,6 +456,8 @@ const cnCalculator = {
     document.getElementById('toggle-cn-layer').checked = true;
     document.getElementById('toggle-lulc-layer').checked = false;
     document.getElementById('toggle-soil-layer').checked = false;
+    
+    this.updateLayerZIndices();
   },
 
   setupMapHover: function() {

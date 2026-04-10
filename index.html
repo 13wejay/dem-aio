@@ -27,6 +27,9 @@
   <!-- Shapefile JS (shpjs) -->
   <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
 
+  <!-- Proj4js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+
   <!-- App CSS -->
   <link rel="stylesheet" href="css/main.css">
   
@@ -388,20 +391,29 @@
 
               <!-- CN Layer Toggles -->
               <div id="cn-layer-toggles" style="display:none; margin-top: 12px; font-size: 11px;">
-                <label class="checkbox-row" style="margin-bottom:6px">
-                  <input type="checkbox" id="toggle-cn-layer" checked>
-                  <span>Show CN Raster</span>
-                </label>
+                <h4 style="margin: 0 0 8px; font-size: 0.9em; display:flex; justify-content:space-between; align-items:center;">
+                  Map Layers
+                  <span style="font-size:10px; color:var(--text-muted); font-weight:normal;">Drag to reorder</span>
+                </h4>
+                <div id="cn-layer-list">
+                  <label class="checkbox-row" style="margin-bottom:6px; cursor:default;">
+                    <i data-lucide="grip-vertical" class="drag-handle" style="width:14px;height:14px; color:var(--text-muted); cursor:grab; margin-right:4px;"></i>
+                    <input type="checkbox" id="toggle-cn-layer" checked>
+                    <span style="flex-grow:1;">Show CN Raster</span>
+                  </label>
 
-                <label class="checkbox-row" style="margin-bottom:6px">
-                  <input type="checkbox" id="toggle-lulc-layer">
-                  <span>Show LULC Raster</span>
-                </label>
+                  <label class="checkbox-row" style="margin-bottom:6px; cursor:default;">
+                    <i data-lucide="grip-vertical" class="drag-handle" style="width:14px;height:14px; color:var(--text-muted); cursor:grab; margin-right:4px;"></i>
+                    <input type="checkbox" id="toggle-lulc-layer">
+                    <span style="flex-grow:1;">Show LULC Raster</span>
+                  </label>
 
-                <label class="checkbox-row" style="margin-bottom:6px">
-                  <input type="checkbox" id="toggle-soil-layer">
-                  <span>Show Soil Raster</span>
-                </label>
+                  <label class="checkbox-row" style="margin-bottom:6px; cursor:default;">
+                    <i data-lucide="grip-vertical" class="drag-handle" style="width:14px;height:14px; color:var(--text-muted); cursor:grab; margin-right:4px;"></i>
+                    <input type="checkbox" id="toggle-soil-layer">
+                    <span style="flex-grow:1;">Show Soil Raster</span>
+                  </label>
+                </div>
                 
                 <div class="input-group" style="margin-top: 10px;">
                   <label>Layer Opacity</label>
@@ -431,6 +443,121 @@
                 </div>
               </div>
               
+            </div>
+          </div>
+
+          <!-- Satellite & Flood Section -->
+          <div class="sidebar-section" id="section-satellite">
+            <div class="section-header" data-section="satellite">
+              <h3><i data-lucide="satellite" style="width:16px;height:16px"></i> Satellite & Flood</h3>
+              <span class="section-chevron">▾</span>
+            </div>
+            <div class="section-content">
+              <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 10px;">
+                Fetch Sentinel imagery to classify water and simulate DEM-based inundation.
+              </p>
+              
+              <div id="satellite-tools-container">
+                <h4 style="margin: 0 0 6px; font-size: 0.9em;">1. Sentinel Imagery</h4>
+                <div class="input-group">
+                  <label>Satellite Platform</label>
+                  <select id="sat-platform">
+                    <option value="sentinel-2-l2a">Sentinel-2 (Optical)</option>
+                    <option value="sentinel-1-grd">Sentinel-1 (SAR)</option>
+                  </select>
+                </div>
+                <div class="input-row">
+                  <div class="input-group">
+                    <label>Start Date</label>
+                    <input type="date" id="sat-date-start">
+                  </div>
+                  <div class="input-group">
+                    <label>End Date</label>
+                    <input type="date" id="sat-date-end">
+                  </div>
+                </div>
+                <!-- S2 extra options -->
+                <div class="input-group" id="sat-s2-options">
+                  <label>Max Cloud Cover (%)</label>
+                  <input type="number" id="sat-cloud-cover" value="20" min="0" max="100">
+                </div>
+                <button class="btn btn-secondary btn-full" id="btn-search-sat" style="margin-bottom:8px;">
+                  <i data-lucide="search" style="width:14px;height:14px"></i> Search STAC Datasets
+                </button>
+                <div id="sat-results-container" style="display:none; margin-bottom:10px;">
+                  <div class="input-group">
+                    <label>Available Scenes</label>
+                    <select id="sat-scene-select" style="font-size:0.85em;"></select>
+                  </div>
+                  <button class="btn btn-secondary btn-full" id="btn-load-sat">
+                    <i data-lucide="download-cloud" style="width:14px;height:14px"></i> Load Image
+                  </button>
+                </div>
+                <div class="progress-container" id="sat-progress" style="display:none; margin-top: 10px;">
+                  <div class="progress-bar-track">
+                    <div class="progress-bar-fill" id="sat-progress-fill"></div>
+                  </div>
+                  <div class="progress-status" id="sat-progress-status">Fetching...</div>
+                </div>
+              </div>
+
+              <!-- Satellite derivations -->
+              <div id="sat-derive-container" style="display:none; margin-top:15px; padding-top:10px; border-top: 1px solid var(--border);">
+                <h4 style="margin: 0 0 6px; font-size: 0.9em;">2. Satellite Derivations</h4>
+                <div id="sat-s2-derive">
+                  <button class="btn btn-secondary btn-full" id="btn-calc-ndwi" style="margin-bottom:6px;">Calculate NDWI Mask (Water)</button>
+                </div>
+                <div id="sat-s1-derive" style="display:none;">
+                  <button class="btn btn-secondary btn-full" id="btn-calc-s1-water" style="margin-bottom:6px;">Calculate Water Mask (< -15dB)</button>
+                </div>
+              </div>
+
+              <!-- Flood Bathtub Modeling -->
+              <div id="flood-model-container" style="margin-top:15px; padding-top:10px; border-top: 1px solid var(--border);">
+                <h4 style="margin: 0 0 6px; font-size: 0.9em;">3. DEM Flood Simulation</h4>
+                <p style="font-size: 0.8em; color: var(--text-muted); margin-bottom: 8px;">
+                  Drag the slider or type a value to simulate inundation in real-time.
+                </p>
+                <div class="input-group">
+                  <label>Flood Water Level (Elev in meters)</label>
+                  <div class="range-row">
+                    <input type="range" id="flood-level" min="0" max="10" step="0.1" value="0" style="flex:1;">
+                    <input type="number" id="flood-level-manual" class="number-input" min="0" step="0.1" value="0" style="width: 50px; margin-left: 8px; padding: 2px 4px; background: rgba(255,255,255,0.1); color: var(--text-primary); border: 1px solid var(--border); border-radius: 4px; font-size: 0.9em; text-align: right;">
+                    <span style="font-size: 0.85em; color: var(--text-muted); margin-left:4px;">m</span>
+                  </div>
+                </div>
+                <div class="progress-container" id="flood-progress" style="display:none; margin-top: 8px;">
+                  <div class="progress-bar-track">
+                    <div class="progress-bar-fill" id="flood-progress-fill"></div>
+                  </div>
+                  <div class="progress-status" id="flood-progress-status">Simulating...</div>
+                </div>
+              </div>
+
+              <!-- Layer Toggles -->
+              <div id="sat-layer-toggles" style="display:none; margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11px;">
+                <label class="checkbox-row" style="margin-bottom:6px">
+                  <input type="checkbox" id="toggle-sat-image" checked>
+                  <span>Show Satellite Image</span>
+                </label>
+                <label class="checkbox-row" style="margin-bottom:6px">
+                  <input type="checkbox" id="toggle-sat-water" checked>
+                  <span>Show Extracted Water Mask</span>
+                </label>
+                <label class="checkbox-row" style="margin-bottom:6px">
+                  <input type="checkbox" id="toggle-flood-inundation" checked>
+                  <span>Show DEM Flood Inundation</span>
+                </label>
+                
+                <div class="input-group" style="margin-top: 10px;">
+                  <label>Layer Opacity</label>
+                  <div class="range-row">
+                    <input type="range" id="sat-opacity" min="0" max="100" value="80">
+                    <span class="range-value" id="sat-opacity-val">80%</span>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
 
@@ -531,6 +658,25 @@
                    <button class="export-btn" id="btn-export-soil">
                      <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
                      Soil Type
+                   </button>
+                 </div>
+              </div>
+
+              <!-- Satellite/Flood Exports -->
+              <div id="sat-exports" style="display:none; margin-top:15px; border-top: 1px solid var(--border); padding-top:15px;">
+                 <h4 style="margin: 0 0 6px; font-size: 0.9em;">Satellite & Flood</h4>
+                 <div class="export-grid">
+                   <button class="export-btn" id="btn-export-sat">
+                     <span class="export-icon"><i data-lucide="camera" style="width:16px;height:16px"></i></span>
+                     Image (.png)
+                   </button>
+                   <button class="export-btn" id="btn-export-water-mask">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     Water Mask (.tif)
+                   </button>
+                   <button class="export-btn" id="btn-export-flood-mask">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     Flood Inundation (.tif)
                    </button>
                  </div>
               </div>
@@ -657,6 +803,27 @@
             </div>
           </div>
 
+          <!-- Flood Inundation Legend -->
+          <div id="map-legend-flood" style="display:none; margin-bottom:10px;">
+            <div style="color:var(--text-secondary); margin-bottom:6px; font-size:10px; font-family:var(--font-ui); text-transform:uppercase; letter-spacing:0.5px; display:flex; justify-content:space-between;">
+              <span>Flood Inundation</span>
+              <span id="flood-legend-level" style="color:var(--accent); font-weight:600;">0.0m</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+              <span style="display:inline-block; width:14px; height:14px; background:rgba(30,130,255,0.6); border:1px solid rgba(30,130,255,0.9); border-radius:2px; flex-shrink:0;"></span>
+              <div style="flex:1;">
+                <div style="font-size:11px; color:var(--text-primary); font-weight:600;" id="flood-legend-pixels">— px</div>
+                <div style="font-size:10px; color:var(--text-muted);" id="flood-legend-area">— km²</div>
+              </div>
+            </div>
+            <div style="background:rgba(255,255,255,0.08); border-radius:3px; height:5px; overflow:hidden;">
+              <div id="flood-legend-bar" style="height:100%; background:linear-gradient(90deg,rgba(30,130,255,0.7),rgba(80,200,255,0.9)); width:0%; transition:width 0.3s ease;"></div>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:9px; color:var(--text-muted); margin-top:2px;">
+              <span>0%</span><span id="flood-legend-pct">—</span><span>100%</span>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
@@ -673,6 +840,8 @@
   <script src="js/viz.js"></script>
   <script src="js/hydro.js"></script>
   <script src="js/cn.js"></script>
+  <script src="js/satellite.js"></script>
+  <script src="js/flood.js"></script>
   <script src="js/app.js"></script>
   <script>
     lucide.createIcons();

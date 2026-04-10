@@ -209,8 +209,9 @@ DEM.app = (function () {
     document.getElementById('btn-export-hillshade').addEventListener('click', exportHillshade);
     document.getElementById('btn-export-contour').addEventListener('click', exportContour);
     document.getElementById('btn-export-screenshot').addEventListener('click', exportScreenshot);
-
-
+    
+    // Init Satellite
+    initSatellite();
 
     // Initial ramp preview
     updateRampPreview('viridis');
@@ -220,10 +221,129 @@ DEM.app = (function () {
   function bindSlider(sliderId, displayId, formatter, onChange) {
     const slider = document.getElementById(sliderId);
     const display = document.getElementById(displayId);
+    if (!slider || !display) return;
     slider.addEventListener('input', () => {
-      display.textContent = formatter(parseInt(slider.value));
-      if (onChange) onChange(parseInt(slider.value));
+      display.textContent = formatter(parseFloat(slider.value));
+      if (onChange) onChange(parseFloat(slider.value));
     });
+  }
+
+  /* --- Satellite & Flood Initialization --- */
+  function initSatellite() {
+    const today = new Date();
+    const lastMonth = new Date(today);
+    lastMonth.setMonth(today.getMonth() - 1);
+    
+    document.getElementById('sat-date-start').valueAsDate = lastMonth;
+    document.getElementById('sat-date-end').valueAsDate = today;
+
+    document.getElementById('sat-platform').addEventListener('change', (e) => {
+       document.getElementById('sat-s2-options').style.display = e.target.value === 'sentinel-2-l2a' ? 'block' : 'none';
+    });
+
+    document.getElementById('btn-search-sat').addEventListener('click', async () => {
+       let bbox = DEM.mapModule.getBBox();
+       if (!bbox && state.bbox) bbox = state.bbox;
+       if (!bbox) { DEM.utils.toast('Please draw a bounding box first', 'error'); return; }
+       
+       const platform = document.getElementById('sat-platform').value;
+       const start = document.getElementById('sat-date-start').value;
+       const end = document.getElementById('sat-date-end').value;
+       const cloud = document.getElementById('sat-cloud-cover').value;
+       
+       try {
+           const results = await DEM.satellite.search(platform, bbox, start, end, cloud);
+           if (!results || results.length === 0) {
+              DEM.utils.toast('No scenes found', 'info');
+              return;
+           }
+           const select = document.getElementById('sat-scene-select');
+           select.innerHTML = '';
+           results.forEach((ft, i) => {
+              const opt = document.createElement('option');
+              opt.value = i;
+              opt.textContent = `${ft.id.substring(0, 25)}... (${new Date(ft.properties.datetime).toLocaleDateString()})`;
+              select.appendChild(opt);
+           });
+           document.getElementById('sat-results-container').style.display = 'block';
+       } catch (e) {
+           DEM.utils.toast('Search failed', 'error');
+           console.error(e);
+       }
+    });
+
+    document.getElementById('btn-load-sat').addEventListener('click', async () => {
+       let bbox = DEM.mapModule.getBBox();
+       if (!bbox && state.bbox) bbox = state.bbox;
+       const idx = parseInt(document.getElementById('sat-scene-select').value);
+       const success = await DEM.satellite.loadScene(idx, bbox);
+       if(success) {
+           document.getElementById('sat-layer-toggles').style.display = 'block';
+           document.getElementById('sat-exports').style.display = 'block';
+           
+           document.getElementById('sat-derive-container').style.display = 'block';
+           const platform = document.getElementById('sat-platform').value;
+           document.getElementById('sat-s2-derive').style.display = platform === 'sentinel-2-l2a' ? 'block' : 'none';
+           document.getElementById('sat-s1-derive').style.display = platform === 'sentinel-1-grd' ? 'block' : 'none';
+       }
+    });
+
+    document.getElementById('btn-calc-ndwi').addEventListener('click', () => {
+       DEM.satellite.calculateNDWI();
+    });
+    
+    document.getElementById('btn-calc-s1-water').addEventListener('click', () => {
+       DEM.satellite.calculateS1Water();
+    });
+
+    bindSlider('sat-opacity', 'sat-opacity-val', v => v + '%', v => {
+       DEM.mapModule.setSatelliteOpacity(v/100);
+    });
+
+    document.getElementById('toggle-sat-image').addEventListener('change', e => {
+       DEM.mapModule.toggleSatelliteLayer('image', e.target.checked);
+    });
+    document.getElementById('toggle-sat-water').addEventListener('change', e => {
+       DEM.mapModule.toggleSatelliteLayer('water', e.target.checked);
+    });
+    document.getElementById('toggle-flood-inundation').addEventListener('change', e => {
+       DEM.mapModule.toggleSatelliteLayer('flood', e.target.checked);
+    });
+
+    const floodSlider = document.getElementById('flood-level');
+    const floodManual = document.getElementById('flood-level-manual');
+    let floodTimeout;
+
+    function triggerFloodUpdate(val) {
+       if (!state.demLoaded) return;
+       clearTimeout(floodTimeout);
+       floodTimeout = setTimeout(() => {
+          DEM.flood.runBathtubModel(DEM.dem.getCurrent(), val);
+          // Reveal layer toggles & exports on first use
+          document.getElementById('sat-layer-toggles').style.display = 'block';
+          document.getElementById('sat-exports').style.display = 'block';
+       }, 80);
+    }
+
+    floodSlider.addEventListener('input', () => {
+       const val = parseFloat(floodSlider.value);
+       floodManual.value = val.toFixed(1);
+       triggerFloodUpdate(val);
+    });
+
+    floodManual.addEventListener('input', () => {
+       let val = parseFloat(floodManual.value) || 0;
+       if (val > parseFloat(floodSlider.max)) {
+           floodSlider.max = Math.ceil(val / 10) * 10;
+       }
+       floodSlider.value = val;
+       triggerFloodUpdate(val);
+    });
+
+    // Exports
+    document.getElementById('btn-export-sat').addEventListener('click', exportSatelliteImage);
+    document.getElementById('btn-export-water-mask').addEventListener('click', exportWaterMask);
+    document.getElementById('btn-export-flood-mask').addEventListener('click', exportFloodMask);
   }
 
   /* --- Update color ramp preview --- */
@@ -445,6 +565,52 @@ DEM.app = (function () {
     const blob = DEM.viz.getElevationBlob();
     if (!blob) { DEM.utils.toast('No elevation map to export', 'error'); return; }
     DEM.utils.downloadBlob(blob, 'elevation_map.png');
+  }
+
+  async function exportSatelliteImage() {
+     const canvas = DEM.mapModule.getSatelliteCanvas();
+     if (!canvas) { DEM.utils.toast('No satellite image loaded', 'error'); return; }
+     canvas.toBlob(blob => {
+        DEM.utils.downloadBlob(blob, 'satellite_imagery.png');
+     });
+  }
+
+  async function exportRasterMask(mask, name) {
+     if (!mask) return;
+     const dem = DEM.dem.getCurrent();
+     if (!dem || !GeoTIFF) return;
+     DEM.utils.showLoading(`Exporting ${name}...`);
+     try {
+         const metadata = {
+           width: dem.width,
+           height: dem.height,
+           GeographicTypeGeoKey: 4326,
+           ModelPixelScale: [Math.abs(dem.transform.pixelWidth), Math.abs(dem.transform.pixelHeight), 0],
+           ModelTiepoint: [0, 0, 0, dem.transform.originX, dem.transform.originY, 0]
+         };
+         // GeoTIFF requires float32 or uint arrays typically matching the config, assuming Float32 works mostly:
+         const typedMask = new Float32Array(mask.length);
+         for(let i=0; i<mask.length; i++) typedMask[i] = mask[i];
+         const arrayBuffer = await GeoTIFF.writeArrayBuffer(typedMask, metadata);
+         const blob = new Blob([arrayBuffer], { type: 'image/tiff' });
+         DEM.utils.hideLoading();
+         DEM.utils.downloadBlob(blob, `${name}.tif`);
+     } catch (e) {
+         DEM.utils.hideLoading();
+         DEM.utils.toast('Export failed: ' + e.message, 'error');
+     }
+  }
+
+  function exportWaterMask() {
+     const mask = DEM.satellite.getState().waterMask;
+     if (!mask) { DEM.utils.toast('No water mask derived', 'error'); return; }
+     exportRasterMask(mask, 'water_mask');
+  }
+
+  function exportFloodMask() {
+     const mask = DEM.flood.getMask();
+     if (!mask) { DEM.utils.toast('No flood mask simulated', 'error'); return; }
+     exportRasterMask(mask, 'flood_mask');
   }
 
   return { init, onBBoxChanged, getState: () => state };
