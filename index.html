@@ -21,6 +21,9 @@
   <!-- Plotty -->
   <script src="https://cdn.jsdelivr.net/npm/plotty@0.4.9/dist/plotty.min.js"></script>
 
+  <!-- SortableJS -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
   <!-- Shapefile JS (shpjs) -->
   <script src="https://unpkg.com/shpjs@latest/dist/shp.js"></script>
 
@@ -289,27 +292,38 @@
 
               <!-- Hydrology Layer Toggles -->
               <div id="hydro-layer-toggles" style="display:none; margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px;">
-                <h4 style="margin: 0 0 8px; font-size: 0.9em;">Map Layers</h4>
-                <label class="checkbox-row" style="margin-bottom:6px">
-                  <input type="checkbox" id="toggle-hydro-fill">
-                  <span>Sink Filled DEM</span>
-                </label>
-                <label class="checkbox-row" style="margin-bottom:6px">
-                  <input type="checkbox" id="toggle-hydro-dir">
-                  <span>Flow Direction (D8)</span>
-                </label>
-                <label class="checkbox-row" style="margin-bottom:6px">
-                  <input type="checkbox" id="toggle-hydro-acc" checked>
-                  <span>Flow Accumulation</span>
-                </label>
-                <label class="checkbox-row" style="margin-bottom:6px">
-                  <input type="checkbox" id="toggle-hydro-stream" checked>
-                  <span>Stream Network</span>
-                </label>
-                <label class="checkbox-row" style="margin-bottom:6px">
-                  <input type="checkbox" id="toggle-hydro-catchment" checked>
-                  <span>Catchment Polygon</span>
-                </label>
+                <h4 style="margin: 0 0 8px; font-size: 0.9em; display:flex; justify-content:space-between; align-items:center;">
+                  Map Layers
+                  <span style="font-size:10px; color:var(--text-muted); font-weight:normal;">Drag to reorder</span>
+                </h4>
+                <div id="hydro-layer-list">
+                  <label class="checkbox-row" style="margin-bottom:6px; cursor:default;">
+                    <i data-lucide="grip-vertical" class="drag-handle" style="width:14px;height:14px; color:var(--text-muted); cursor:grab; margin-right:4px;"></i>
+                    <input type="checkbox" id="toggle-hydro-fill">
+                    <span style="flex-grow:1;">Sink Filled DEM</span>
+                  </label>
+                  <label class="checkbox-row" style="margin-bottom:6px; cursor:default;">
+                    <i data-lucide="grip-vertical" class="drag-handle" style="width:14px;height:14px; color:var(--text-muted); cursor:grab; margin-right:4px;"></i>
+                    <input type="checkbox" id="toggle-hydro-dir">
+                    <span style="flex-grow:1;">Flow Direction (D8)</span>
+                  </label>
+                  <label class="checkbox-row" style="margin-bottom:6px; cursor:default;">
+                    <i data-lucide="grip-vertical" class="drag-handle" style="width:14px;height:14px; color:var(--text-muted); cursor:grab; margin-right:4px;"></i>
+                    <input type="checkbox" id="toggle-hydro-acc">
+                    <span style="flex-grow:1;">Flow Accumulation</span>
+                  </label>
+                  <label class="checkbox-row" style="margin-bottom:6px; cursor:default;">
+                    <i data-lucide="grip-vertical" class="drag-handle" style="width:14px;height:14px; color:var(--text-muted); cursor:grab; margin-right:4px;"></i>
+                    <input type="checkbox" id="toggle-hydro-stream">
+                    <span style="flex-grow:1;">Stream Network</span>
+                  </label>
+                  <label class="checkbox-row" style="margin-bottom:6px; cursor:default;">
+                    <i data-lucide="grip-vertical" class="drag-handle" style="width:14px;height:14px; color:var(--text-muted); cursor:grab; margin-right:4px;"></i>
+                    <input type="checkbox" id="toggle-hydro-catchment">
+                    <span style="flex-grow:1;">Catchment Polygon</span>
+                  </label>
+                </div>
+                
                 <div class="input-group" style="margin-top: 10px;">
                   <label>Layer Opacity</label>
                   <div class="range-row">
@@ -485,11 +499,19 @@
                    </button>
                    <button class="export-btn" id="btn-export-hydro-stream">
                      <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
-                     Streams (.json)
+                     Streams (.tif)
+                   </button>
+                   <button class="export-btn" id="btn-export-hydro-stream-json">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     Streams (.geojson)
                    </button>
                    <button class="export-btn" id="btn-export-hydro-catchment">
                      <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
-                     Catchment (.json)
+                     Catchment (.tif)
+                   </button>
+                   <button class="export-btn" id="btn-export-hydro-catchment-json">
+                     <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
+                     Catchment (.geojson)
                    </button>
                  </div>
               </div>
@@ -588,6 +610,15 @@
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px; color:var(--text-primary);">
               <div style="display:flex; align-items:center;"><span style="display:inline-block; width:15px; height:1.5px; background:#3388ff; margin-right:4px;"></span>Low Order</div>
               <div style="display:flex; align-items:center;"><span style="display:inline-block; width:15px; height:6px; background:#3388ff; margin-right:4px;"></span>High Order</div>
+            </div>
+          </div>
+          
+          <!-- Catchment Legend -->
+          <div id="map-legend-hydro-catchment" style="display:none; margin-bottom:10px;">
+            <div style="color:var(--text-secondary); margin-bottom:4px; font-size:10px; font-family:var(--font-ui); text-transform:uppercase; letter-spacing:0.5px;">Delineated Catchment</div>
+            <div style="display:flex; align-items:center; font-size:11px; color:var(--text-primary);">
+              <span style="display:inline-block; width:14px; height:14px; background:rgba(50, 150, 255, 0.4); border:1px dashed #3388ff; margin-right:6px;"></span>
+              Area:&nbsp;<strong id="val-catchment-area" style="color:var(--accent);">-</strong>&nbsp;km²
             </div>
           </div>
           <!-- CN Legend -->

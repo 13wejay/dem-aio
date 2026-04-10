@@ -12,8 +12,10 @@ DEM.hydro = (function () {
     transform: null,
     bbox: null,
     nodata: -9999,
-    streamsGeoJSON: null,
     catchmentGeoJSON: null,
+    streamsGeoJSON: null,
+    streamRaster: null, // Uint8Array for stream mask
+    catchmentRaster: null, // Uint8Array for catchment mask
     isSelectingPourPoint: false
   };
 
@@ -63,8 +65,53 @@ DEM.hydro = (function () {
     document.getElementById('btn-export-hydro-fill')?.addEventListener('click', () => exportHydroGeoTIFF('filled_dem', hydroState.fillRaster));
     document.getElementById('btn-export-hydro-dir')?.addEventListener('click', () => exportHydroGeoTIFF('flow_direction', hydroState.dirRaster));
     document.getElementById('btn-export-hydro-acc')?.addEventListener('click', () => exportHydroGeoTIFF('flow_accumulation', hydroState.accRaster));
-    document.getElementById('btn-export-hydro-stream')?.addEventListener('click', () => exportHydroGeoJSON('stream_network', hydroState.streamsGeoJSON));
-    document.getElementById('btn-export-hydro-catchment')?.addEventListener('click', () => exportHydroGeoJSON('catchment', hydroState.catchmentGeoJSON));
+    document.getElementById('btn-export-hydro-stream')?.addEventListener('click', () => exportHydroGeoTIFF('stream_network', hydroState.streamRaster));
+    document.getElementById('btn-export-hydro-stream-json')?.addEventListener('click', () => exportHydroGeoJSON('stream_network', hydroState.streamsGeoJSON));
+    document.getElementById('btn-export-hydro-catchment')?.addEventListener('click', () => exportHydroGeoTIFF('catchment', hydroState.catchmentRaster));
+    document.getElementById('btn-export-hydro-catchment-json')?.addEventListener('click', () => exportHydroGeoJSON('catchment', hydroState.catchmentGeoJSON));
+
+    // Sortable JS Initialization for Layer Ordering
+    const hydroLayerList = document.getElementById('hydro-layer-list');
+    if (hydroLayerList && typeof Sortable !== 'undefined') {
+      new Sortable(hydroLayerList, {
+        handle: '.drag-handle',
+        animation: 150,
+        onEnd: updateLayerZIndices
+      });
+    }
+  }
+
+  function updateLayerZIndices() {
+    const listItems = document.querySelectorAll('#hydro-layer-list input[type="checkbox"]');
+    // The items are visual top-to-bottom. Top most gets highest Z.
+    let baseZ = 310;
+    listItems.forEach(input => {
+      const type = input.id.replace('toggle-hydro-', '');
+      let layer = null;
+      if (type === 'fill') layer = hydroState.fillLayer;
+      if (type === 'dir') layer = hydroState.dirLayer;
+      if (type === 'acc') layer = hydroState.accLayer;
+      if (type === 'stream') layer = hydroState.streamLayer;
+      if (type === 'catchment') layer = hydroState.catchmentLayer;
+      
+      // Update its Leaflet zIndex OR pane zIndex if vector
+      if (layer) {
+        if (layer.setZIndex) {
+          layer.setZIndex(baseZ);
+        } else if (layer.getLayers && layer.getLayers().length > 0) {
+          // If GeoJSON vector layer, no built-in setZIndex, but we can bringToFront if we arrange properly
+          // Note: for Stream Network, Leaflet vector z-index is tied to SVG DOM order.
+        }
+      }
+      baseZ--;
+    });
+    
+    // For vector layers (streamLayer), bringing them to front iteratively from bottom to top enforces DOM order. 
+    // We reverse the logic to call bringToFront on the bottom elements first.
+    Array.from(listItems).reverse().forEach(input => {
+       const type = input.id.replace('toggle-hydro-', '');
+       if (type === 'stream' && hydroState.streamLayer) hydroState.streamLayer.bringToFront();
+    });
   }
 
   function setHydroOpacity(opacity) {
@@ -86,7 +133,7 @@ DEM.hydro = (function () {
     if (type === 'dir') { layer = hydroState.dirLayer; legendId = 'map-legend-hydro-dir'; }
     if (type === 'acc') { layer = hydroState.accLayer; legendId = 'map-legend-hydro-acc'; }
     if (type === 'stream') { layer = hydroState.streamLayer; legendId = 'map-legend-hydro-stream'; }
-    if (type === 'catchment') layer = hydroState.catchmentLayer;
+    if (type === 'catchment') { layer = hydroState.catchmentLayer; legendId = 'map-legend-hydro-catchment'; }
 
     if (!layer && type !== 'stream' && type !== 'catchment') return; // Stream and catchment wait for extraction, handle safely gracefully
 
@@ -100,8 +147,11 @@ DEM.hydro = (function () {
 
     if (layer) {
       if (show) {
-        if (!appMap.hasLayer(layer)) layer.addTo(appMap);
-      } else {
+        if (!appMap.hasLayer(layer)) {
+        layer.addTo(appMap);
+        updateLayerZIndices(); // Ensure correct position when shown
+      }
+    } else {
         if (appMap.hasLayer(layer)) appMap.removeLayer(layer);
       }
     }
@@ -626,6 +676,7 @@ DEM.hydro = (function () {
     }
 
     hydroState.streamsGeoJSON = { type: "FeatureCollection", features: features };
+    hydroState.streamRaster = streamMap;
 
     const appMap = DEM.mapModule.getMap();
     if (hydroState.streamLayer) appMap.removeLayer(hydroState.streamLayer);
@@ -650,6 +701,7 @@ DEM.hydro = (function () {
 
     if (document.getElementById('toggle-hydro-stream').checked) {
       hydroState.streamLayer.addTo(appMap);
+      updateLayerZIndices();
       toggleLayer('stream', true); // Force legend refresh
     }
     
@@ -805,6 +857,7 @@ DEM.hydro = (function () {
         geometry: { type: "MultiPolygon", coordinates: geojsonPolys }
       }]
     };
+    hydroState.catchmentRaster = mask;
 
     const bounds = [[hydroState.bbox.south, hydroState.bbox.west], [hydroState.bbox.north, hydroState.bbox.east]];
     const appMap = DEM.mapModule.getMap();
@@ -815,9 +868,14 @@ DEM.hydro = (function () {
     
     if (document.getElementById('toggle-hydro-catchment').checked) {
       hydroState.catchmentLayer.addTo(appMap);
+      updateLayerZIndices();
     }
     
     const approxKm2 = (areaCells * Math.abs(transform.pixelWidth * 111) * Math.abs(transform.pixelHeight * 111)).toFixed(2);
+    
+    document.getElementById('val-catchment-area').textContent = approxKm2;
+    toggleLayer('catchment', document.getElementById('toggle-hydro-catchment').checked);
+
     document.getElementById('btn-export-hydro-catchment').disabled = false;
     DEM.utils.toast(`Catchment Delineated (approx ${approxKm2} km²)`, 'success');
   }
