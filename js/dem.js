@@ -147,34 +147,13 @@ DEM.dem = (function () {
         pos += chunk.length;
       }
 
-      // Save raw tile to local drive via background API call
-      try {
-        let filename = url.split('/').pop().split('?')[0];
-        if (!filename.endsWith('.tif') && !filename.endsWith('.tiff')) filename += '.tif';
-        fetch(`/api/save?filename=${encodeURIComponent(filename)}`, {
-          method: 'POST',
-          body: new Blob([allChunks])
-        }).catch(err => console.warn('Failed to save raw tile locally:', err));
-      } catch (e) {}
-
       return allChunks.buffer;
     } catch (err) {
       // Final fallback: try direct URL
       try {
         const directResponse = await fetch(url);
         if (!directResponse.ok) throw new Error(`HTTP ${directResponse.status}`);
-        const arrBuf = await directResponse.arrayBuffer();
-        
-        try {
-          let filename = url.split('/').pop().split('?')[0];
-          if (!filename.endsWith('.tif') && !filename.endsWith('.tiff')) filename += '.tif';
-          fetch(`/api/save?filename=${encodeURIComponent(filename)}`, {
-            method: 'POST',
-            body: new Blob([arrBuf])
-          }).catch(e => {});
-        } catch(e) {}
-        
-        return arrBuf;
+        return await directResponse.arrayBuffer();
       } catch (e2) {
         throw new Error(`Failed to download tile: ${err.message}`);
       }
