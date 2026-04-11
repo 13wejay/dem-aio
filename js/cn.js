@@ -181,11 +181,19 @@ const cnCalculator = {
       }
 
       this.updateProgress(-1, 'Reading LULC Raster Data...');
-      this.lulcData = await this.readGeoTiffBbox(signedLulcUrl, this.bbox, 30); // Downsample to ~30m
+      try {
+        this.lulcData = await this.readGeoTiffBbox(signedLulcUrl, this.bbox, 30); // Downsample to ~30m
+      } catch (err) {
+        throw new Error(`Failed to read LULC data: ${err.message || err.name}. URL: ${signedLulcUrl}`);
+      }
 
       this.updateProgress(-1, 'Reading HYSOGs250m Soil Data...');
       const hysogsUrl = window.location.origin + '/api/earthdata?url=' + encodeURIComponent('https://data.ornldaac.earthdata.nasa.gov/protected/global_soil/Global_Hydrologic_Soil_Group/data/HYSOGs250m.tif');
-      this.soilData = await this.readGeoTiffBbox(hysogsUrl, this.bbox, 30, this.lulcData.width, this.lulcData.height);
+      try {
+        this.soilData = await this.readGeoTiffBbox(hysogsUrl, this.bbox, 30, this.lulcData.width, this.lulcData.height);
+      } catch (err) {
+        throw new Error(`Failed to read HYSOGs data: ${err.message || err.name}. URL: ${hysogsUrl}`);
+      }
 
       this.updateProgress(70, 'Calculating Curve Number...');
       this.cnRaster = this.calculateCNRaster(this.lulcData, this.soilData);

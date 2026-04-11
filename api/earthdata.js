@@ -144,7 +144,8 @@ export default async function handler(request) {
     const responseHeaders = new Headers({
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
-      'Cache-Control': 'public, max-age=3600'
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Vary': 'Range'
     });
 
     // Forward important response headers
