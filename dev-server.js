@@ -113,6 +113,35 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Planetary Computer SAS sign proxy (avoids browser CORS)
+  if (parsedUrl.pathname === '/api/sign') {
+    const href = parsedUrl.query.href;
+    const collection = parsedUrl.query.collection;
+    let pcUrl;
+    if (collection) {
+      pcUrl = `https://planetarycomputer.microsoft.com/api/sas/v1/token/${encodeURIComponent(collection)}`;
+    } else if (href) {
+      pcUrl = `https://planetarycomputer.microsoft.com/api/sas/v1/sign?href=${encodeURIComponent(href)}`;
+    } else {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing href or collection' }));
+      return;
+    }
+
+    console.log(`[SIGN] ${pcUrl.substring(0, 80)}...`);
+    https.get(pcUrl, { headers: { 'User-Agent': 'DEM-Explorer/1.0' } }, (proxyRes) => {
+      res.setHeader('Content-Type', proxyRes.headers['content-type'] || 'application/json');
+      res.setHeader('Cache-Control', 'public, max-age=3300');
+      res.writeHead(proxyRes.statusCode);
+      proxyRes.pipe(res);
+    }).on('error', (err) => {
+      console.error('[SIGN ERROR]', err.message);
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Sign proxy failed: ' + err.message }));
+    });
+    return;
+  }
+
   // Earthdata proxy endpoint that follows redirects and injects Basic Auth
   if (parsedUrl.pathname === '/api/earthdata') {
     const targetUrl = parsedUrl.query.url;
@@ -131,21 +160,30 @@ const server = http.createServer((req, res) => {
 
     console.log(`[EARTHDATA] Fetching ${targetUrl}`);
 
+    const EARTHDATA_HOSTS = ['earthdata.nasa.gov', 'ornldaac', 'urs.earthdata.nasa.gov'];
+    const isEarthdata = (u) => EARTHDATA_HOSTS.some(h => u.includes(h));
+
     const fetchFollowRedirects = (currentUrl, options, redirectCount = 0) => {
-      if (redirectCount > 10) {
-        res.writeHead(500);
-        res.end('Too many redirects');
-        return;
-      }
+      if (redirectCount > 10) { res.writeHead(500); res.end('Too many redirects'); return; }
       
       const reqProto = currentUrl.startsWith('https') ? https : http;
-      const req = reqProto.request(currentUrl, options, (proxyRes) => {
+
+      // Only send auth headers to Earthdata domains — strip them for S3 presigned URLs
+      const safeHeaders = { ...options.headers };
+      if (!isEarthdata(currentUrl)) {
+        delete safeHeaders.Authorization;
+        delete safeHeaders.Cookie;
+      }
+      // Always forward Range
+      if (req.headers['range']) safeHeaders['Range'] = req.headers['range'];
+
+      const proxyReq = reqProto.request(currentUrl, { ...options, headers: safeHeaders }, (proxyRes) => {
         if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
           const redirectUrl = new URL(proxyRes.headers.location, currentUrl).toString();
           
-          // Maintain cookies across redirects
+          // Collect cookies from Earthdata redirects
           let cookies = options.headers.Cookie || '';
-          if (proxyRes.headers['set-cookie']) {
+          if (isEarthdata(currentUrl) && proxyRes.headers['set-cookie']) {
             const newCookies = proxyRes.headers['set-cookie'].map(c => c.split(';')[0]).join('; ');
             cookies = cookies ? `${cookies}; ${newCookies}` : newCookies;
           }
@@ -153,49 +191,42 @@ const server = http.createServer((req, res) => {
           const newOptions = { ...options };
           newOptions.headers = { ...options.headers, Cookie: cookies };
           
-          // If redirecting to Earthdata Login, provide Basic Auth if needed
-          // But usually we just pass Bearer token everywhere if we have it
-          if (envVars.EARTHDATA_TOKEN) {
-             newOptions.headers.Authorization = `Bearer ${envVars.EARTHDATA_TOKEN}`;
-          } else if (redirectUrl.includes('urs.earthdata.nasa.gov') && envVars.EARTHDATA_USERNAME) {
-            const auth = Buffer.from(`${envVars.EARTHDATA_USERNAME}:${envVars.EARTHDATA_PASSWORD}`).toString('base64');
-            newOptions.headers.Authorization = `Basic ${auth}`;
+          // Only add/keep auth headers for Earthdata domains
+          if (!isEarthdata(redirectUrl)) {
+            delete newOptions.headers.Authorization;
           }
           
           fetchFollowRedirects(redirectUrl, newOptions, redirectCount + 1);
         } else {
-          // Final destination reached
+          // Final destination — forward response
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
           if (proxyRes.headers['content-type']) res.setHeader('Content-Type', proxyRes.headers['content-type']);
           if (proxyRes.headers['content-length']) res.setHeader('Content-Length', proxyRes.headers['content-length']);
           if (proxyRes.headers['content-range']) res.setHeader('Content-Range', proxyRes.headers['content-range']);
-          res.setHeader('Accept-Ranges', 'bytes');
+          if (proxyRes.headers['accept-ranges']) res.setHeader('Accept-Ranges', proxyRes.headers['accept-ranges']);
+          else res.setHeader('Accept-Ranges', 'bytes');
           res.writeHead(proxyRes.statusCode);
           proxyRes.pipe(res);
         }
       });
-      req.on('error', (err) => {
+      proxyReq.on('error', (err) => {
         console.error('[EARTHDATA ERROR]', err.message);
-        res.writeHead(502);
-        res.end(JSON.stringify({ error: 'Earthdata proxy failed: ' + err.message }));
+        if (!res.headersSent) { res.writeHead(502); res.end(JSON.stringify({ error: err.message })); }
       });
-      req.end();
+      proxyReq.end();
     };
 
-    // Begin fetch
-    const headers = {
-      'User-Agent': 'DEM-Explorer/1.0',
-      ...(req.headers['range'] ? { 'Range': req.headers['range'] } : {})
-    };
-    
-    // Inject Bearer token immediately if provided
+    // Begin fetch with auth headers (Earthdata only)
+    const initHeaders = { 'User-Agent': 'DEM-Explorer/1.0' };
     if (envVars.EARTHDATA_TOKEN) {
-      headers.Authorization = `Bearer ${envVars.EARTHDATA_TOKEN}`;
+      initHeaders.Authorization = `Bearer ${envVars.EARTHDATA_TOKEN}`;
+    } else if (envVars.EARTHDATA_USERNAME) {
+      const auth = Buffer.from(`${envVars.EARTHDATA_USERNAME}:${envVars.EARTHDATA_PASSWORD}`).toString('base64');
+      initHeaders.Authorization = `Basic ${auth}`;
     }
 
-    fetchFollowRedirects(targetUrl, {
-      method: req.method,
-      headers: headers
-    });
+    fetchFollowRedirects(targetUrl, { method: req.method, headers: initHeaders });
     
     return;
   }

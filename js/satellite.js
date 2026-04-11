@@ -43,20 +43,21 @@ DEM.satellite = (function () {
     }
   }
 
+  // Route SAS signing through our own serverless proxy (/api/sign) to avoid CORS
+  const SIGN_PROXY = '/api/sign?href=';
+
   async function getSignedUrl(href) {
-    // Try direct Planetary Computer signing first
     try {
-      const res = await fetch(SIGN_API + encodeURIComponent(href));
-      if (!res.ok) throw new Error(`SAS API returned ${res.status}`);
+      const res = await fetch(SIGN_PROXY + encodeURIComponent(href));
+      if (!res.ok) throw new Error(`Sign proxy returned ${res.status}`);
       const ct = res.headers.get('content-type') || '';
-      if (!ct.includes('application/json')) throw new Error('SAS API returned non-JSON response');
+      if (!ct.includes('application/json')) throw new Error('Sign proxy returned non-JSON');
       const data = await res.json();
       if (data.href) return data.href;
-      throw new Error('No href in SAS response');
+      throw new Error('No href in sign response');
     } catch (e) {
-      console.warn('Direct SAS sign failed, returning original href:', e.message);
-      // Fallback: return the unsigned href (works for public assets)
-      return href;
+      console.warn('SAS sign failed, using unsigned href:', e.message);
+      return href; // Fallback — many PC blobs are public
     }
   }
 

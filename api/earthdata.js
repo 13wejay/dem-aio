@@ -1,46 +1,77 @@
 // Vercel Edge Function — Authenticated proxy for NASA Earthdata
+// Key design: Bearer/Basic auth only goes to Earthdata domains.
+// When Earthdata redirects to S3 presigned URLs, we strip the Authorization
+// header so S3's own query-string signature can work correctly.
 export const config = { runtime: 'edge' };
 
-const ALLOWED_EARTHDATA_DOMAINS = [
+const EARTHDATA_DOMAINS = [
+  'earthdata.nasa.gov',
+  'ornldaac.earthdata.nasa.gov',
   'data.ornldaac.earthdata.nasa.gov',
   'urs.earthdata.nasa.gov',
-  'opendap.earthdata.nasa.gov',
-  'opendap.cr.usgs.gov'
 ];
 
-async function fetchFollowRedirects(url, headers, maxRedirects = 8) {
-  let currentUrl = url;
+function isEarthdataDomain(url) {
+  try {
+    const host = new URL(url).hostname;
+    return EARTHDATA_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+  } catch { return false; }
+}
+
+const ALLOWED_TARGET_DOMAINS = [
+  'data.ornldaac.earthdata.nasa.gov',
+  'opendap.earthdata.nasa.gov',
+];
+
+async function fetchFollowRedirects(initialUrl, earhdataAuthHeaders, rangeHeader, maxRedirects = 10) {
+  let currentUrl = initialUrl;
   let cookies = {};
 
-  for (let i = 0; i < maxRedirects; i++) {
+  for (let i = 0; i <= maxRedirects; i++) {
+    const isED = isEarthdataDomain(currentUrl);
+
+    // Only send auth headers to Earthdata. Strip them for S3 / other hosts.
+    const reqHeaders = {
+      'User-Agent': 'DEM-Explorer/1.0'
+    };
+
+    if (isED) {
+      Object.assign(reqHeaders, earhdataAuthHeaders);
+      const cookieStr = buildCookieHeader(cookies);
+      if (cookieStr) reqHeaders['Cookie'] = cookieStr;
+    }
+
+    // Always forward Range header so COG reads work
+    if (rangeHeader) reqHeaders['Range'] = rangeHeader;
+
     const response = await fetch(currentUrl, {
       method: 'GET',
-      headers: { ...headers, Cookie: buildCookieHeader(cookies) },
-      redirect: 'manual'  // Handle redirects manually
+      headers: reqHeaders,
+      redirect: 'manual'
     });
 
-    // Collect any Set-Cookie headers from this response
-    const setCookie = response.headers.get('set-cookie');
-    if (setCookie) {
-      parseCookies(setCookie, cookies);
+    // Collect cookies from Earthdata responses
+    if (isED) {
+      const setCookie = response.headers.get('set-cookie');
+      if (setCookie) parseCookies(setCookie, cookies);
     }
 
     if (response.status === 200 || response.status === 206) {
-      return response; // Success
+      return response;
     }
 
-    if (response.status === 301 || response.status === 302 || response.status === 307 || response.status === 308) {
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('location');
       if (!location) break;
       currentUrl = location.startsWith('http') ? location : new URL(location, currentUrl).href;
       continue;
     }
 
-    // Non-redirect, non-success
+    // Return error response as-is so we can report status
     return response;
   }
 
-  throw new Error('Too many redirects or failed to fetch');
+  throw new Error('Too many redirects');
 }
 
 function buildCookieHeader(cookies) {
@@ -48,19 +79,18 @@ function buildCookieHeader(cookies) {
 }
 
 function parseCookies(setCookieHeader, target) {
-  // setCookieHeader may be one or multiple cookies comma-separated
-  const parts = setCookieHeader.split(/,(?=[^ ])/);
+  const parts = setCookieHeader.split(/,(?=\s*\w+=)/);
   for (const part of parts) {
     const main = part.split(';')[0].trim();
-    const eqIdx = main.indexOf('=');
-    if (eqIdx > 0) {
-      target[main.slice(0, eqIdx).trim()] = main.slice(eqIdx + 1).trim();
+    const eq = main.indexOf('=');
+    if (eq > 0) {
+      target[main.slice(0, eq).trim()] = main.slice(eq + 1).trim();
     }
   }
 }
 
 export default async function handler(request) {
-  const url = new URL(request.url);
+  const reqUrl = new URL(request.url);
 
   // CORS preflight
   if (request.method === 'OPTIONS') {
@@ -75,50 +105,38 @@ export default async function handler(request) {
     });
   }
 
-  const targetUrl = url.searchParams.get('url');
+  const targetUrl = reqUrl.searchParams.get('url');
   if (!targetUrl) {
-    return new Response(JSON.stringify({ error: 'Missing url parameter' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
+    return errorResponse(400, 'Missing url parameter');
   }
 
-  // Security: only allow Earthdata domains
-  const isAllowed = ALLOWED_EARTHDATA_DOMAINS.some(domain => targetUrl.includes(domain));
+  // Security: only allow known Earthdata data domains as the initial target
+  const isAllowed = ALLOWED_TARGET_DOMAINS.some(d => targetUrl.includes(d));
   if (!isAllowed) {
-    return new Response(JSON.stringify({ error: 'Domain not allowed. Must be an Earthdata domain.' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
+    return errorResponse(403, `Domain not allowed: ${new URL(targetUrl).hostname}`);
   }
 
-  const token = process.env.EARTHDATA_TOKEN;
+  const token    = process.env.EARTHDATA_TOKEN;
   const username = process.env.EARTHDATA_USERNAME;
   const password = process.env.EARTHDATA_PASSWORD;
 
   if (!token && !username) {
-    return new Response(JSON.stringify({ error: 'No Earthdata credentials configured on server.' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
+    return errorResponse(500, 'No Earthdata credentials configured on server. Set EARTHDATA_TOKEN in Vercel env vars.');
   }
 
-  // Build auth headers — prefer token, fall back to Basic Auth
+  // Auth header, applied only to Earthdata domains
   const authHeaders = {};
   if (token) {
     authHeaders['Authorization'] = `Bearer ${token}`;
   } else {
-    const encoded = btoa(`${username}:${password}`);
-    authHeaders['Authorization'] = `Basic ${encoded}`;
+    authHeaders['Authorization'] = `Basic ${btoa(`${username}:${password}`)}`;
   }
 
   // Forward Range header for COG partial reads
-  const rangeHeader = request.headers.get('Range');
-  if (rangeHeader) authHeaders['Range'] = rangeHeader;
-  authHeaders['User-Agent'] = 'DEM-Explorer/1.0';
+  const rangeHeader = request.headers.get('Range') || request.headers.get('range') || null;
 
   try {
-    const response = await fetchFollowRedirects(targetUrl, authHeaders);
+    const upstream = await fetchFollowRedirects(targetUrl, authHeaders, rangeHeader);
 
     const responseHeaders = new Headers({
       'Access-Control-Allow-Origin': '*',
@@ -126,21 +144,25 @@ export default async function handler(request) {
       'Cache-Control': 'public, max-age=3600'
     });
 
-    const forwardHeaders = ['content-type', 'content-length', 'content-range', 'accept-ranges'];
-    for (const h of forwardHeaders) {
-      const val = response.headers.get(h);
+    // Forward important response headers
+    for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
+      const val = upstream.headers.get(h);
       if (val) responseHeaders.set(h, val);
     }
 
-    return new Response(response.body, {
-      status: response.status,
+    return new Response(upstream.body, {
+      status: upstream.status,
       headers: responseHeaders
     });
 
-  } catch (error) {
-    return new Response(JSON.stringify({ error: 'Earthdata proxy failed: ' + error.message }), {
-      status: 502,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
+  } catch (err) {
+    return errorResponse(502, 'Proxy error: ' + err.message);
   }
+}
+
+function errorResponse(status, message) {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+  });
 }

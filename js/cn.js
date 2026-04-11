@@ -165,10 +165,10 @@ const cnCalculator = {
       if (!lulcItem) throw new Error('No ESA WorldCover data found for this bounding box.');
       
       const lulcUrl = lulcItem.assets.map.href;
-      // Get SAS Token (Planetary Computer may return 503 under load)
+      // Get SAS Token via our proxy (avoids CORS on Vercel)
       let signedLulcUrl = lulcUrl;
       try {
-        const sasRes = await fetch('https://planetarycomputer.microsoft.com/api/sas/v1/token/esa-worldcover');
+        const sasRes = await fetch('/api/sign?collection=esa-worldcover');
         if (sasRes.ok) {
           const ct = sasRes.headers.get('content-type') || '';
           if (ct.includes('application/json')) {
