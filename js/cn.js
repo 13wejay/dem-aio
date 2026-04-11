@@ -165,10 +165,20 @@ const cnCalculator = {
       if (!lulcItem) throw new Error('No ESA WorldCover data found for this bounding box.');
       
       const lulcUrl = lulcItem.assets.map.href;
-      // Get SAS Token
-      const sasRes = await fetch('https://planetarycomputer.microsoft.com/api/sas/v1/token/esa-worldcover');
-      const sasData = await sasRes.json();
-      const signedLulcUrl = lulcUrl + '?' + sasData.token;
+      // Get SAS Token (Planetary Computer may return 503 under load)
+      let signedLulcUrl = lulcUrl;
+      try {
+        const sasRes = await fetch('https://planetarycomputer.microsoft.com/api/sas/v1/token/esa-worldcover');
+        if (sasRes.ok) {
+          const ct = sasRes.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const sasData = await sasRes.json();
+            if (sasData.token) signedLulcUrl = lulcUrl + '?' + sasData.token;
+          }
+        }
+      } catch (e) {
+        console.warn('ESA WorldCover SAS token failed, trying unsigned URL:', e.message);
+      }
 
       this.updateProgress(-1, 'Reading LULC Raster Data...');
       this.lulcData = await this.readGeoTiffBbox(signedLulcUrl, this.bbox, 30); // Downsample to ~30m

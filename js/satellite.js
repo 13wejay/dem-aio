@@ -44,9 +44,20 @@ DEM.satellite = (function () {
   }
 
   async function getSignedUrl(href) {
-    const res = await fetch(SIGN_API + encodeURIComponent(href));
-    const data = await res.json();
-    return data.href;
+    // Try direct Planetary Computer signing first
+    try {
+      const res = await fetch(SIGN_API + encodeURIComponent(href));
+      if (!res.ok) throw new Error(`SAS API returned ${res.status}`);
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) throw new Error('SAS API returned non-JSON response');
+      const data = await res.json();
+      if (data.href) return data.href;
+      throw new Error('No href in SAS response');
+    } catch (e) {
+      console.warn('Direct SAS sign failed, returning original href:', e.message);
+      // Fallback: return the unsigned href (works for public assets)
+      return href;
+    }
   }
 
   async function loadScene(itemIndex, bbox) {
