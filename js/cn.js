@@ -168,12 +168,12 @@ const cnCalculator = {
       // Get SAS Token via our proxy (avoids CORS on Vercel)
       let signedLulcUrl = lulcUrl;
       try {
-        const sasRes = await fetch('/api/sign?collection=esa-worldcover');
+        const sasRes = await fetch('/api/sign?href=' + encodeURIComponent(lulcUrl));
         if (sasRes.ok) {
           const ct = sasRes.headers.get('content-type') || '';
           if (ct.includes('application/json')) {
-            const sasData = await sasRes.json();
-            if (sasData.token) signedLulcUrl = lulcUrl + '?' + sasData.token;
+            const data = await sasRes.json();
+            if (data.href) signedLulcUrl = data.href;
           }
         }
       } catch (e) {

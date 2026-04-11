@@ -41,8 +41,11 @@ async function fetchFollowRedirects(initialUrl, earhdataAuthHeaders, rangeHeader
       if (cookieStr) reqHeaders['Cookie'] = cookieStr;
     }
 
-    // Always forward Range header so COG reads work
-    if (rangeHeader) reqHeaders['Range'] = rangeHeader;
+    // Forward Range header so COG reads work, but NOT during Earthdata login/oauth flows
+    const isLoginFlow = currentUrl.includes('urs.earthdata.nasa.gov') || currentUrl.includes('/oauth');
+    if (rangeHeader && !isLoginFlow) {
+      reqHeaders['Range'] = rangeHeader;
+    }
 
     const response = await fetch(currentUrl, {
       method: 'GET',

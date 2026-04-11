@@ -71,7 +71,7 @@ DEM.satellite = (function () {
     try {
       if (state.currentSatellite === 'sentinel-2-l2a') {
         await loadS2(item, bbox);
-      } else if (state.currentSatellite === 'sentinel-1-grd') {
+      } else if (state.currentSatellite === 'sentinel-1-rtc') {
         await loadS1(item, bbox);
       }
       
@@ -318,7 +318,7 @@ DEM.satellite = (function () {
   }
 
   function calculateS1Water() {
-    if (!state.imageData || state.currentSatellite !== 'sentinel-1-grd') return;
+    if (!state.imageData || state.currentSatellite !== 'sentinel-1-rtc') return;
     const { vh, width, height } = state.imageData;
     const len = width * height;
     const mask = new Uint8Array(len);
