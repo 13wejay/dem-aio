@@ -48,7 +48,10 @@ DEM.satellite = (function () {
 
   async function getSignedUrl(href) {
     try {
-      const res = await fetch(SIGN_PROXY + encodeURIComponent(href));
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(SIGN_PROXY + encodeURIComponent(href), { signal: controller.signal });
+      clearTimeout(timer);
       if (!res.ok) throw new Error(`Sign proxy returned ${res.status}`);
       const ct = res.headers.get('content-type') || '';
       if (!ct.includes('application/json')) throw new Error('Sign proxy returned non-JSON');
