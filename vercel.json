@@ -7,11 +7,5 @@
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" }
       ]
     }
-  ],
-  "env": {
-    "OPENTOPO_API_KEY": "@opentopo_api_key",
-    "EARTHDATA_TOKEN": "@earthdata_token",
-    "EARTHDATA_USERNAME": "@earthdata_username",
-    "EARTHDATA_PASSWORD": "@earthdata_password"
-  }
+  ]
 }
