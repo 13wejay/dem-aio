@@ -476,8 +476,17 @@ DEM.mapModule = (function () {
 
         const v = grid[i];
 
-        // Mask to user bbox if provided
-        const outside = userBbox ? (lon < userBbox.west || lon > userBbox.east || lat < userBbox.south || lat > userBbox.north) : false;
+        // Mask to user bbox if provided (check if cell overlaps the bounding box)
+        let outside = false;
+        if (userBbox) {
+          const cellWest = dataBbox.west + x * dx;
+          const cellEast = cellWest + dx;
+          // The image is drawn top-down, so row 0 is north
+          const cellNorth = dataBbox.north - y * dy;
+          const cellSouth = cellNorth - dy;
+
+          outside = cellWest > userBbox.east || cellEast < userBbox.west || cellSouth > userBbox.north || cellNorth < userBbox.south;
+        }
 
         if (v < 0 || v >= 9999 || isNaN(v) || v === 0 || outside) {
           // Transparent for nodata/zero/outside mask
@@ -498,7 +507,7 @@ DEM.mapModule = (function () {
     const bounds = getLeafletBounds(dataBbox);
     if (rainfallOverlay) { map.removeLayer(rainfallOverlay); }
     rainfallOverlay = L.imageOverlay(canvas.toDataURL(), bounds, {
-      opacity: 0.85, interactive: false
+      opacity: 0.85, interactive: false, className: 'pixelated-overlay'
     }).addTo(map);
   }
 

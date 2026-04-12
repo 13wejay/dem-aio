@@ -898,6 +898,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .cn-table td { color: var(--text-primary); }
 .cn-table tbody tr:hover { background: var(--bg-input); }
 
+/* --- Sharp Grids (No interpolation) --- */
+.pixelated-overlay {
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -o-crisp-edges;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+
 /* --- Responsive --- */
 @media (max-width: 768px) {
   .sidebar {
