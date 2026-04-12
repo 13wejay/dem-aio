@@ -55,6 +55,10 @@ A significant portion of the raster data is retrieved dynamically through the **
 *   **Provider:** General Bathymetric Chart of the Oceans
 *   **Attribution:** "GEBCO Compilation Group (2023). GEBCO 2023 Grid (doi:10.5285/f98b053b-0cbc-6c23-e053-6c86abc0af7b)". If using for publication, please consult the GEBCO official citation guidelines.
 
+### GPM IMERG (Integrated Multi-satellitE Retrievals for GPM)
+*   **Provider:** NASA Goddard Earth Sciences Data and Information Services Center (GES DISC)
+*   **Attribution:** "Huffman, G.J., E.F. Stocker, D.T. Bolvin, E.J. Nelkin, Jackson Tan (2019), GPM IMERG Late Precipitation L3 1 day 0.1 degree x 0.1 degree V07, Greenbelt, MD, Goddard Earth Sciences Data and Information Services Center (GES DISC). Retrieved through DEM Explorer from the NASA EOSDIS."
+
 ---
 
 *This application was developed by Muhammad Ramadhani Wijayanto. By utilizing this tool, you inherently agree with the terms and proper crediting requirements of these underlying platforms and datasets.*

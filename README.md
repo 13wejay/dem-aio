@@ -47,6 +47,13 @@ Simulate water inundation at a given elevation threshold using a simple bathtub 
 - Inundated area (km²) and percentage of valid terrain.
 - Visual flood mask overlay on the map.
 
+#### 🌧️ Rainfall & Precipitation
+Fetch daily precipitation data via NASA GPM IMERG Late Run (V07) using OPeNDAP:
+- Date range extraction over the defined Bounding Box.
+- Daily Map rendering across the selected time period.
+- Interactive Bar chart showing daily rainfall trend.
+- **Export**: Download daily summary statistics as CSV or raw NetCDF4 binary grids via a ZIP file.
+
 #### 📡 Satellite Imagery (via Microsoft Planetary Computer)
 Search and load satellite imagery for the selected region:
 - **Sentinel-2 (L2A)**: True-color RGB display + NDWI water body extraction (Green / NIR).
@@ -82,11 +89,18 @@ npm run dev
 # http://localhost:3000
 ```
 
-### Optional API Key (OpenTopography)
-Sources including SRTM, ALOS, NASADEM, and GEBCO require a free API key from [OpenTopography](https://opentopography.org/). Add it to a `.env` file in the project root:
+### External APIs & Data Services
+In order to use some specific datasets you may need to configure credentials. Add them to a `.env` file in the project root:
 
 ```env
-OPENTOPO_API_KEY=your_key_here
+# Required for SRTM, ALOS, NASADEM, GEBCO
+OPENTOPO_API_KEY=your_opentopography_key_here
+
+# Required for NASA Earthdata (e.g. GPM IMERG Rainfall)
+# You can provide either your Username/Password OR a Bearer Token
+EARTHDATA_USERNAME=your_username
+EARTHDATA_PASSWORD=your_password
+EARTHDATA_TOKEN=your_bearer_token  # Overrides username/password if present
 ```
 
 ---
