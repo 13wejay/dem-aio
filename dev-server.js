@@ -49,7 +49,8 @@ const ALLOWED_DOMAINS = [
   'planetarycomputer.microsoft.com',
   'data.ornldaac.earthdata.nasa.gov',
   'cmr.earthdata.nasa.gov',
-  'urs.earthdata.nasa.gov'
+  'urs.earthdata.nasa.gov',
+  'gpm1.gesdisc.eosdis.nasa.gov'
 ];
 
 const server = http.createServer((req, res) => {
@@ -113,6 +114,88 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Planetary Computer SAS URL signing proxy (mirrors api/sign.js)
+  if (parsedUrl.pathname === '/api/sign') {
+    const href = parsedUrl.query.href;
+    const collection = parsedUrl.query.collection;
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Content-Type': 'application/json'
+    };
+
+    const TOKEN_ROUTE_HOSTS = {
+      'sentinel1euwestrtc.blob.core.windows.net': 'sentinel-1-rtc',
+    };
+    const PC_SIGN_API  = 'https://planetarycomputer.microsoft.com/api/sas/v1/sign?href=';
+    const PC_TOKEN_API = 'https://planetarycomputer.microsoft.com/api/sas/v1/token/';
+
+    if (collection) {
+      https.get(PC_TOKEN_API + encodeURIComponent(collection), (pcRes) => {
+        let body = '';
+        pcRes.on('data', c => body += c);
+        pcRes.on('end', () => {
+          res.writeHead(pcRes.statusCode, corsHeaders);
+          res.end(body);
+        });
+      }).on('error', err => {
+        res.writeHead(502, corsHeaders);
+        res.end(JSON.stringify({ error: 'Token fetch failed: ' + err.message }));
+      });
+      return;
+    }
+
+    if (!href) {
+      res.writeHead(400, corsHeaders);
+      res.end(JSON.stringify({ error: 'Missing href or collection parameter' }));
+      return;
+    }
+
+    // Check if this host needs the token route
+    let hrefHostname = '';
+    try { hrefHostname = new URL(href).hostname; } catch {}
+    const tokenCollection = TOKEN_ROUTE_HOSTS[hrefHostname];
+
+    if (tokenCollection) {
+      https.get(PC_TOKEN_API + encodeURIComponent(tokenCollection), (pcRes) => {
+        let body = '';
+        pcRes.on('data', c => body += c);
+        pcRes.on('end', () => {
+          try {
+            const data = JSON.parse(body);
+            const signedHref = href + (href.includes('?') ? '&' : '?') + data.token;
+            res.writeHead(200, corsHeaders);
+            res.end(JSON.stringify({ href: signedHref, 'msft:expiry': data['msft:expiry'] }));
+          } catch {
+            res.writeHead(502, corsHeaders);
+            res.end(JSON.stringify({ error: 'Token parse failed' }));
+          }
+        });
+      }).on('error', err => {
+        res.writeHead(502, corsHeaders);
+        res.end(JSON.stringify({ error: 'Token fetch failed: ' + err.message }));
+      });
+      return;
+    }
+
+    // Default: per-blob signing
+    console.log(`[SIGN] ${href}`);
+    https.get(PC_SIGN_API + encodeURIComponent(href), (pcRes) => {
+      let body = '';
+      pcRes.on('data', c => body += c);
+      pcRes.on('end', () => {
+        res.writeHead(pcRes.statusCode, {
+          ...corsHeaders,
+          'Content-Type': pcRes.headers['content-type'] || 'application/json'
+        });
+        res.end(body);
+      });
+    }).on('error', err => {
+      res.writeHead(502, corsHeaders);
+      res.end(JSON.stringify({ error: 'Sign proxy failed: ' + err.message }));
+    });
+    return;
+  }
+
   // Earthdata proxy endpoint that follows redirects and injects Basic Auth
   if (parsedUrl.pathname === '/api/earthdata') {
     const targetUrl = parsedUrl.query.url;
@@ -122,14 +205,17 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    // Must be Earthdata
-    if (!targetUrl.includes('earthdata.nasa.gov')) {
+    // Must be NASA Earthdata or EOSDIS domain
+    const isNasaDomain = targetUrl.includes('earthdata.nasa.gov') || targetUrl.includes('eosdis.nasa.gov');
+    if (!isNasaDomain) {
       res.writeHead(403, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Domain not allowed' }));
       return;
     }
 
     console.log(`[EARTHDATA] Fetching ${targetUrl}`);
+
+    const isNasaUrl = (u) => u.includes('earthdata.nasa.gov') || u.includes('eosdis.nasa.gov');
 
     const fetchFollowRedirects = (currentUrl, options, redirectCount = 0) => {
       if (redirectCount > 10) {
@@ -138,8 +224,16 @@ const server = http.createServer((req, res) => {
         return;
       }
       
-      const reqProto = currentUrl.startsWith('https') ? https : http;
-      const req = reqProto.request(currentUrl, options, (proxyRes) => {
+      // Parse URL to handle special chars like [] in OPeNDAP queries
+      const parsedTarget = new URL(currentUrl);
+      const reqProto = parsedTarget.protocol === 'https:' ? https : http;
+      const reqOpts = {
+        ...options,
+        hostname: parsedTarget.hostname,
+        port: parsedTarget.port,
+        path: parsedTarget.pathname + parsedTarget.search,
+      };
+      const req = reqProto.request(reqOpts, (proxyRes) => {
         if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
           const redirectUrl = new URL(proxyRes.headers.location, currentUrl).toString();
           
@@ -153,13 +247,17 @@ const server = http.createServer((req, res) => {
           const newOptions = { ...options };
           newOptions.headers = { ...options.headers, Cookie: cookies };
           
-          // If redirecting to Earthdata Login, provide Basic Auth if needed
-          // But usually we just pass Bearer token everywhere if we have it
-          if (envVars.EARTHDATA_TOKEN) {
-             newOptions.headers.Authorization = `Bearer ${envVars.EARTHDATA_TOKEN}`;
-          } else if (redirectUrl.includes('urs.earthdata.nasa.gov') && envVars.EARTHDATA_USERNAME) {
-            const auth = Buffer.from(`${envVars.EARTHDATA_USERNAME}:${envVars.EARTHDATA_PASSWORD}`).toString('base64');
-            newOptions.headers.Authorization = `Basic ${auth}`;
+          // Only send auth to NASA domains; strip for S3/external redirects
+          if (isNasaUrl(redirectUrl)) {
+            if (envVars.EARTHDATA_TOKEN) {
+               newOptions.headers.Authorization = `Bearer ${envVars.EARTHDATA_TOKEN}`;
+            } else if (redirectUrl.includes('urs.earthdata.nasa.gov') && envVars.EARTHDATA_USERNAME) {
+              const auth = Buffer.from(`${envVars.EARTHDATA_USERNAME}:${envVars.EARTHDATA_PASSWORD}`).toString('base64');
+              newOptions.headers.Authorization = `Basic ${auth}`;
+            }
+          } else {
+            // Strip auth for non-NASA redirects (e.g., S3 presigned URLs)
+            delete newOptions.headers.Authorization;
           }
           
           fetchFollowRedirects(redirectUrl, newOptions, redirectCount + 1);

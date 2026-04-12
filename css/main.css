@@ -170,7 +170,7 @@ body {
 .sidebar-section.collapsed .section-chevron { transform: rotate(-90deg); }
 .section-content {
   padding: 0 14px 14px;
-  max-height: 960px;
+  max-height: 1060px;
   overflow: hidden;
   transition: max-height 0.35s ease, padding 0.35s ease;
 }
@@ -773,6 +773,38 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .ramp-terrain { background: linear-gradient(90deg, #333399, #2d8f2d, #a6782b, #f5f5dc, #ffffff); }
 .ramp-jet { background: linear-gradient(90deg, #000080, #0000ff, #00ffff, #ffff00, #ff0000, #800000); }
 .ramp-grayscale { background: linear-gradient(90deg, #000000, #ffffff); }
+.ramp-rainfall { background: linear-gradient(90deg, #bee6ff, #50b4ff, #1e64e6, #7828c8, #c81e64); }
+
+/* --- Rainfall Trend Chart --- */
+#rain-trend-canvas {
+  width: 100%;
+  height: 70px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+}
+
+/* Date input styling */
+input[type="date"] {
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+input[type="date"]:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
 
 /* --- Legend Bar --- */
 .legend-bar {

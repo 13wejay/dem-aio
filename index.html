@@ -30,6 +30,9 @@
   <!-- Proj4js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
 
+  <!-- JSZip -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
   <!-- App CSS -->
   <link rel="stylesheet" href="css/main.css">
   
@@ -506,6 +509,7 @@
                 <h4 style="margin: 0 0 6px; font-size: 0.9em;">2. Satellite Derivations</h4>
                 <div id="sat-s2-derive">
                   <button class="btn btn-secondary btn-full" id="btn-calc-ndwi" style="margin-bottom:6px;">Calculate NDWI Mask (Water)</button>
+                  <button class="btn btn-secondary btn-full" id="btn-calc-ndvi" style="margin-bottom:6px;">Calculate NDVI (Vegetation)</button>
                 </div>
                 <div id="sat-s1-derive" style="display:none;">
                   <button class="btn btn-secondary btn-full" id="btn-calc-s1-water" style="margin-bottom:6px;">Calculate Water Mask (< -15dB)</button>
@@ -545,6 +549,10 @@
                   <span>Show Extracted Water Mask</span>
                 </label>
                 <label class="checkbox-row" style="margin-bottom:6px">
+                  <input type="checkbox" id="toggle-sat-ndvi" checked>
+                  <span>Show NDVI Layer</span>
+                </label>
+                <label class="checkbox-row" style="margin-bottom:6px">
                   <input type="checkbox" id="toggle-flood-inundation" checked>
                   <span>Show DEM Flood Inundation</span>
                 </label>
@@ -558,6 +566,81 @@
                 </div>
               </div>
 
+            </div>
+          </div>
+
+          <!-- GPM Rainfall Section -->
+          <div class="sidebar-section collapsed" id="section-rainfall">
+            <div class="section-header" data-section="rainfall">
+              <h3><i data-lucide="cloud-rain" style="width:16px;height:16px"></i> Rainfall (GPM)</h3>
+              <span class="section-chevron">▾</span>
+            </div>
+            <div class="section-content">
+              <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 10px;">
+                NASA GPM IMERG Late Run daily precipitation (0.1° resolution).
+              </p>
+
+              <div class="input-row">
+                <div class="input-group">
+                  <label>Start Date</label>
+                  <input type="date" id="rain-date-start">
+                </div>
+                <div class="input-group">
+                  <label>End Date</label>
+                  <input type="date" id="rain-date-end">
+                </div>
+              </div>
+
+              <button class="btn btn-primary btn-full" id="btn-fetch-rain" style="margin-top:6px;">
+                <i data-lucide="cloud-download" style="width:14px;height:14px"></i> Fetch Rainfall Data
+              </button>
+
+              <div class="progress-container" id="rain-progress" style="display:none; margin-top: 10px;">
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="rain-progress-fill"></div>
+                </div>
+                <div class="progress-status" id="rain-progress-status">Fetching...</div>
+              </div>
+
+              <!-- Date Slider + Trend Chart (hidden until data loaded) -->
+              <div id="rain-viewer" style="display:none; margin-top:15px; padding-top:10px; border-top: 1px solid var(--border);">
+                <div class="input-group">
+                  <label>Date Slider</label>
+                  <div class="range-row">
+                    <input type="range" id="rain-date-slider" min="0" max="0" value="0" step="1">
+                    <span class="range-value" id="rain-date-label" style="min-width:70px;">-</span>
+                  </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;">
+                  <span style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-label);">Daily Mean Rainfall</span>
+                  <span id="rain-day-value" style="font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-weight: 600;">-</span>
+                </div>
+                <canvas id="rain-trend-canvas"></canvas>
+
+                <!-- Layer Toggles -->
+                <div style="margin-top: 12px; font-size: 11px;">
+                  <label class="checkbox-row" style="margin-bottom:6px">
+                    <input type="checkbox" id="toggle-rain-layer" checked>
+                    <span>Show Rainfall Layer</span>
+                  </label>
+                  <div class="input-group" style="margin-top: 8px;">
+                    <label>Layer Opacity</label>
+                    <div class="range-row">
+                      <input type="range" id="rain-opacity" min="0" max="100" value="85">
+                      <span class="range-value" id="rain-opacity-val">85%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Export -->
+                <button class="btn btn-secondary btn-full" id="btn-export-rain-csv" style="margin-top: 6px;">
+                  <i data-lucide="file-spreadsheet" style="width:14px;height:14px"></i> Export Daily CSV
+                </button>
+                <button class="btn btn-secondary btn-full" id="btn-export-rain-nc" style="margin-top: 6px;">
+                  <i data-lucide="folder-archive" style="width:14px;height:14px"></i> Download NetCDF (ZIP)
+                </button>
+              </div>
             </div>
           </div>
 
@@ -677,6 +760,17 @@
                    <button class="export-btn" id="btn-export-flood-mask">
                      <span class="export-icon"><i data-lucide="download" style="width:16px;height:16px"></i></span>
                      Flood Inundation (.tif)
+                   </button>
+                 </div>
+              </div>
+
+              <!-- Rainfall Export -->
+              <div id="rain-exports" style="display:none; margin-top:15px; border-top: 1px solid var(--border); padding-top:15px;">
+                 <h4 style="margin: 0 0 6px; font-size: 0.9em;">GPM Rainfall</h4>
+                 <div class="export-grid">
+                   <button class="export-btn" id="btn-export-rain-csv-2">
+                     <span class="export-icon"><i data-lucide="file-spreadsheet" style="width:16px;height:16px"></i></span>
+                     Daily CSV
                    </button>
                  </div>
               </div>
@@ -824,6 +918,19 @@
             </div>
           </div>
 
+          <!-- Rainfall Legend -->
+          <div id="map-legend-rainfall" style="display:none; margin-bottom:10px;">
+            <div style="color:var(--text-secondary); margin-bottom:4px; font-size:10px; font-family:var(--font-ui); text-transform:uppercase; letter-spacing:0.5px; display:flex; justify-content:space-between;">
+              <span>GPM Precipitation</span>
+              <span id="rain-legend-date" style="color:var(--accent); font-weight:600;">-</span>
+            </div>
+            <div class="ramp-preview ramp-rainfall" style="height:8px; margin-bottom:2px; border-radius:2px;"></div>
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-primary);">
+              <span>0 mm</span>
+              <span id="rain-legend-max">- mm</span>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
@@ -842,6 +949,7 @@
   <script src="js/cn.js"></script>
   <script src="js/satellite.js"></script>
   <script src="js/flood.js"></script>
+  <script src="js/rainfall.js"></script>
   <script src="js/app.js"></script>
   <script>
     lucide.createIcons();

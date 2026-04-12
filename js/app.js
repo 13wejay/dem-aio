@@ -213,6 +213,9 @@ DEM.app = (function () {
     // Init Satellite
     initSatellite();
 
+    // Init Rainfall
+    initRainfall();
+
     // Initial ramp preview
     updateRampPreview('viridis');
   }
@@ -292,6 +295,10 @@ DEM.app = (function () {
        DEM.satellite.calculateNDWI();
     });
     
+    document.getElementById('btn-calc-ndvi').addEventListener('click', () => {
+       DEM.satellite.calculateNDVI();
+    });
+    
     document.getElementById('btn-calc-s1-water').addEventListener('click', () => {
        DEM.satellite.calculateS1Water();
     });
@@ -305,6 +312,9 @@ DEM.app = (function () {
     });
     document.getElementById('toggle-sat-water').addEventListener('change', e => {
        DEM.mapModule.toggleSatelliteLayer('water', e.target.checked);
+    });
+    document.getElementById('toggle-sat-ndvi').addEventListener('change', e => {
+       DEM.mapModule.toggleSatelliteLayer('ndvi', e.target.checked);
     });
     document.getElementById('toggle-flood-inundation').addEventListener('change', e => {
        DEM.mapModule.toggleSatelliteLayer('flood', e.target.checked);
@@ -611,6 +621,118 @@ DEM.app = (function () {
      const mask = DEM.flood.getMask();
      if (!mask) { DEM.utils.toast('No flood mask simulated', 'error'); return; }
      exportRasterMask(mask, 'flood_mask');
+  }
+
+  /* --- Rainfall Initialization --- */
+  function initRainfall() {
+    // Default dates: use Jan 2024 (data known to exist in NASA GPM archive)
+    document.getElementById('rain-date-start').value = '2024-01-01';
+    document.getElementById('rain-date-end').value = '2024-01-07';
+
+    // Fetch button
+    document.getElementById('btn-fetch-rain').addEventListener('click', async () => {
+      let bbox = DEM.mapModule.getBBox();
+      if (!bbox && state.bbox) bbox = state.bbox;
+      if (!bbox) { DEM.utils.toast('Please draw a bounding box first', 'error'); return; }
+
+      const startStr = document.getElementById('rain-date-start').value;
+      const endStr = document.getElementById('rain-date-end').value;
+      if (!startStr || !endStr) { DEM.utils.toast('Select start and end dates', 'error'); return; }
+
+      const btn = document.getElementById('btn-fetch-rain');
+      btn.disabled = true;
+
+      try {
+        const data = await DEM.rainfall.fetchRange(startStr, endStr, bbox);
+        if (!data || data.length === 0) {
+          DEM.utils.toast('No rainfall data retrieved', 'info');
+          return;
+        }
+
+        // Show viewer panel
+        document.getElementById('rain-viewer').style.display = 'block';
+        document.getElementById('rain-exports').style.display = 'block';
+
+        // Setup date slider
+        const slider = document.getElementById('rain-date-slider');
+        slider.max = data.length - 1;
+        slider.value = 0;
+
+        // Show first day
+        updateRainfallView(0);
+
+        DEM.utils.toast(`Loaded ${data.length} days of GPM rainfall`, 'success');
+      } catch (e) {
+        DEM.utils.toast('Rainfall fetch failed: ' + e.message, 'error');
+        console.error(e);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // Date slider
+    document.getElementById('rain-date-slider').addEventListener('input', (e) => {
+      updateRainfallView(parseInt(e.target.value));
+    });
+
+    // Layer toggle
+    document.getElementById('toggle-rain-layer').addEventListener('change', (e) => {
+      DEM.mapModule.toggleRainfallLayer(e.target.checked);
+      const legendEl = document.getElementById('map-legend-rainfall');
+      const floatLegends = document.getElementById('float-map-legends');
+      if (e.target.checked && DEM.rainfall.getState().dailyData.length > 0) {
+        legendEl.style.display = 'block';
+        floatLegends.style.display = 'block';
+      } else {
+        legendEl.style.display = 'none';
+      }
+    });
+
+    // Opacity slider
+    bindSlider('rain-opacity', 'rain-opacity-val', v => v + '%', v => {
+      DEM.mapModule.setRainfallOpacity(v / 100);
+    });
+
+    // CSV export (both buttons)
+    document.getElementById('btn-export-rain-csv').addEventListener('click', exportRainfallCSV);
+    const csvBtn2 = document.getElementById('btn-export-rain-csv-2');
+    if (csvBtn2) csvBtn2.addEventListener('click', exportRainfallCSV);
+
+    // NetCDF export
+    const ncBtn = document.getElementById('btn-export-rain-nc');
+    if (ncBtn) ncBtn.addEventListener('click', () => DEM.rainfall.downloadNetCDF());
+  }
+
+  function updateRainfallView(index) {
+    const day = DEM.rainfall.showDay(index);
+    if (!day) return;
+
+    // Update label
+    const dateLabel = day.date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    document.getElementById('rain-date-label').textContent = dateLabel;
+    document.getElementById('rain-day-value').textContent = day.mean.toFixed(2) + ' mm/day';
+
+    // Update trend chart
+    DEM.rainfall.drawTrendChart(document.getElementById('rain-trend-canvas'));
+
+    // Update legend
+    const allData = DEM.rainfall.getState().dailyData;
+    let globalMax = 0;
+    for (const d of allData) { if (d.max > globalMax) globalMax = d.max; }
+    document.getElementById('rain-legend-date').textContent = dateLabel;
+    document.getElementById('rain-legend-max').textContent = globalMax.toFixed(1) + ' mm';
+
+    // Show float legend
+    const legendEl = document.getElementById('map-legend-rainfall');
+    const floatLegends = document.getElementById('float-map-legends');
+    legendEl.style.display = 'block';
+    floatLegends.style.display = 'block';
+  }
+
+  function exportRainfallCSV() {
+    const blob = DEM.rainfall.exportCSV();
+    if (!blob) { DEM.utils.toast('No rainfall data to export', 'error'); return; }
+    DEM.utils.downloadBlob(blob, 'gpm_rainfall_daily.csv');
   }
 
   return { init, onBBoxChanged, getState: () => state };

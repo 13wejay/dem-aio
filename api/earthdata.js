@@ -9,6 +9,8 @@ const EARTHDATA_DOMAINS = [
   'ornldaac.earthdata.nasa.gov',
   'data.ornldaac.earthdata.nasa.gov',
   'urs.earthdata.nasa.gov',
+  'gpm1.gesdisc.eosdis.nasa.gov',
+  'disc.gsfc.nasa.gov',
 ];
 
 function isEarthdataDomain(url) {
@@ -21,6 +23,7 @@ function isEarthdataDomain(url) {
 const ALLOWED_TARGET_DOMAINS = [
   'data.ornldaac.earthdata.nasa.gov',
   'opendap.earthdata.nasa.gov',
+  'gpm1.gesdisc.eosdis.nasa.gov',
 ];
 
 async function fetchFollowRedirects(initialUrl, earhdataAuthHeaders, rangeHeader, maxRedirects = 10) {

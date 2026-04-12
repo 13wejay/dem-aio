@@ -198,6 +198,7 @@ DEM.satellite = (function () {
     // We will load visual/RGB directly if available, or load TCI.
     const tciHref = await getSignedUrl(item.assets.visual.href);
     const b03Href = await getSignedUrl(item.assets.B03.href);
+    const b04Href = await getSignedUrl(item.assets.B04.href); // Red
     const b08Href = await getSignedUrl(item.assets.B08.href);
     
     DEM.utils.updateLocalProgress('sat-progress', 30, 'Reading Visual band...');
@@ -266,13 +267,15 @@ DEM.satellite = (function () {
         } catch (e) {}
     }
 
-    DEM.utils.updateLocalProgress('sat-progress', 60, 'Reading Green/NIR bands...');
+    DEM.utils.updateLocalProgress('sat-progress', 60, 'Reading Green/Red/NIR bands...');
     const greenData = await readBBoxFromTiff(b03Href, bbox, false, epsg);
+    const redData = await readBBoxFromTiff(b04Href, bbox, false, epsg);
     const nirData = await readBBoxFromTiff(b08Href, bbox, false, epsg);
 
     state.imageData = {
       rgb: [rastersRGB[0], rastersRGB[1], rastersRGB[2]],
       green: greenData.data,
+      red: redData.data,
       nir: nirData.data,
       width: w,
       height: h,
@@ -320,6 +323,24 @@ DEM.satellite = (function () {
     DEM.utils.toast('NDWI Calculated', 'success');
   }
 
+  function calculateNDVI() {
+    if (!state.imageData || state.currentSatellite !== 'sentinel-2-l2a') return;
+    const { red, nir, width, height } = state.imageData;
+    const len = width * height;
+    const ndviArray = new Float32Array(len);
+    for (let i=0; i<len; i++) {
+        const r = red[i];
+        const n = nir[i];
+        if (r+n === 0) { ndviArray[i] = -9999; continue; }
+        ndviArray[i] = (n - r) / (n + r);
+    }
+    state.ndviMask = ndviArray;
+    if (DEM.mapModule && DEM.mapModule.renderNDVI) {
+      DEM.mapModule.renderNDVI(state.ndviMask, width, height, state.imageData.bbox);
+    }
+    DEM.utils.toast('NDVI Calculated', 'success');
+  }
+
   function calculateS1Water() {
     if (!state.imageData || state.currentSatellite !== 'sentinel-1-rtc') return;
     const { vh, width, height } = state.imageData;
@@ -353,5 +374,5 @@ DEM.satellite = (function () {
     DEM.utils.toast('SAR Water Extracted', 'success');
   }
 
-  return { search, loadScene, calculateNDWI, calculateS1Water, getState: () => state };
+  return { search, loadScene, calculateNDWI, calculateNDVI, calculateS1Water, getState: () => state };
 })();

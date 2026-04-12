@@ -15,7 +15,9 @@ DEM.mapModule = (function () {
   
   let satelliteOverlay = null;
   let waterMaskOverlay = null;
+  let ndviOverlay = null;
   let floodMaskOverlay = null;
+  let rainfallOverlay = null;
 
   /* --- Initialize Map --- */
   function init() {
@@ -289,6 +291,7 @@ DEM.mapModule = (function () {
     if (satelliteOverlay) { map.removeLayer(satelliteOverlay); satelliteOverlay = null; }
     if (waterMaskOverlay) { map.removeLayer(waterMaskOverlay); waterMaskOverlay = null; }
     if (floodMaskOverlay) { map.removeLayer(floodMaskOverlay); floodMaskOverlay = null; }
+    if (rainfallOverlay) { map.removeLayer(rainfallOverlay); rainfallOverlay = null; }
   }
 
   /* --- Satellite & Flood Rendering --- */
@@ -372,6 +375,39 @@ DEM.mapModule = (function () {
     waterMaskOverlay = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: 0.8, interactive: false }).addTo(map);
   }
 
+  function renderNDVI(mask, width, height, bbox) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    const outData = ctx.createImageData(width, height);
+
+    for(let i=0; i<mask.length; i++) {
+      const v = mask[i];
+      if (v === -9999 || v < 0) {
+        outData.data[i*4+3] = 0; // transparent for nodata or water/snow
+        continue;
+      }
+      
+      // NDVI mapping (0 to 1) -> (Bare soil to Dense Veg)
+      // 0 -> [220, 220, 200]
+      // 1 -> [0, 80, 0]
+      const r = 220 - v * 220;
+      const g = 220 - v * 140;
+      const b = 200 - v * 200;
+
+      outData.data[i*4] = r;
+      outData.data[i*4+1] = g;
+      outData.data[i*4+2] = b;
+      outData.data[i*4+3] = 200;
+    }
+    
+    ctx.putImageData(outData, 0, 0);
+    const bounds = getLeafletBounds(bbox);
+    if (ndviOverlay) { map.removeLayer(ndviOverlay); }
+    ndviOverlay = L.imageOverlay(canvas.toDataURL(), bounds, { opacity: 0.8, interactive: false }).addTo(map);
+  }
+
   function renderFloodMask(mask, width, height, bbox) {
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -396,6 +432,7 @@ DEM.mapModule = (function () {
      let layer;
      if (layerName === 'image') layer = satelliteOverlay;
      else if (layerName === 'water') layer = waterMaskOverlay;
+     else if (layerName === 'ndvi') layer = ndviOverlay;
      else if (layerName === 'flood') layer = floodMaskOverlay;
      
      if (!layer) return;
@@ -406,6 +443,7 @@ DEM.mapModule = (function () {
   function setSatelliteOpacity(opacity) {
      if (satelliteOverlay) satelliteOverlay.setOpacity(opacity);
      if (waterMaskOverlay) waterMaskOverlay.setOpacity(opacity);
+     if (ndviOverlay) ndviOverlay.setOpacity(opacity);
      if (floodMaskOverlay) floodMaskOverlay.setOpacity(opacity);
   }
 
@@ -416,6 +454,86 @@ DEM.mapModule = (function () {
      canvas.width = img.width; canvas.height = img.height;
      canvas.getContext('2d').drawImage(img, 0, 0);
      return canvas;
+  }
+
+  /* --- Rainfall Rendering --- */
+  function renderRainfall(grid, width, height, dataBbox, maxVal, userBbox) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.createImageData(width, height);
+
+    const dx = (dataBbox.east - dataBbox.west) / width;
+    const dy = (dataBbox.north - dataBbox.south) / height;
+
+    for (let y = 0; y < height; y++) {
+      // The image is rendered from top (north) to bottom (south)
+      const lat = dataBbox.north - y * dy - dy / 2;
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x;
+        const lon = dataBbox.west + x * dx + dx / 2;
+
+        const v = grid[i];
+
+        // Mask to user bbox if provided
+        const outside = userBbox ? (lon < userBbox.west || lon > userBbox.east || lat < userBbox.south || lat > userBbox.north) : false;
+
+        if (v < 0 || v >= 9999 || isNaN(v) || v === 0 || outside) {
+          // Transparent for nodata/zero/outside mask
+          imgData.data[i * 4 + 3] = 0;
+          continue;
+        }
+
+        const t = Math.min(v / maxVal, 1.0);
+        const { r, g, b } = rainfallColor(t);
+        imgData.data[i * 4]     = r;
+        imgData.data[i * 4 + 1] = g;
+        imgData.data[i * 4 + 2] = b;
+        imgData.data[i * 4 + 3] = 255; // Fully opaque (Leaflet layer opacity handles transparency)
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    const bounds = getLeafletBounds(dataBbox);
+    if (rainfallOverlay) { map.removeLayer(rainfallOverlay); }
+    rainfallOverlay = L.imageOverlay(canvas.toDataURL(), bounds, {
+      opacity: 0.85, interactive: false
+    }).addTo(map);
+  }
+
+  /** Precipitation color ramp: light blue → blue → purple → magenta */
+  function rainfallColor(t) {
+    // 5-stop gradient
+    const stops = [
+      { t: 0.0, r: 190, g: 230, b: 255 },  // very light blue
+      { t: 0.25, r: 80,  g: 180, b: 255 },  // sky blue
+      { t: 0.50, r: 30,  g: 100, b: 230 },  // medium blue
+      { t: 0.75, r: 120, g: 40,  b: 200 },  // purple
+      { t: 1.0,  r: 200, g: 30,  b: 100 },  // magenta
+    ];
+    let s0 = stops[0], s1 = stops[stops.length - 1];
+    for (let i = 0; i < stops.length - 1; i++) {
+      if (t >= stops[i].t && t <= stops[i + 1].t) {
+        s0 = stops[i]; s1 = stops[i + 1]; break;
+      }
+    }
+    const f = (s1.t - s0.t) > 0 ? (t - s0.t) / (s1.t - s0.t) : 0;
+    return {
+      r: Math.round(s0.r + f * (s1.r - s0.r)),
+      g: Math.round(s0.g + f * (s1.g - s0.g)),
+      b: Math.round(s0.b + f * (s1.b - s0.b)),
+    };
+  }
+
+  function toggleRainfallLayer(show) {
+    if (!rainfallOverlay) return;
+    if (show && !map.hasLayer(rainfallOverlay)) map.addLayer(rainfallOverlay);
+    else if (!show && map.hasLayer(rainfallOverlay)) map.removeLayer(rainfallOverlay);
+  }
+
+  function setRainfallOpacity(opacity) {
+    if (rainfallOverlay) rainfallOverlay.setOpacity(opacity);
   }
 
   function getLeafletBounds(bbox) {
@@ -433,7 +551,8 @@ DEM.mapModule = (function () {
     setHillshadeOverlay, showHillshade,
     setContourLayer, showContours,
     removeAllOverlays, getLeafletBounds,
-    renderSatellite, renderWaterMask, renderFloodMask, toggleSatelliteLayer, setSatelliteOpacity, getSatelliteCanvas,
+    renderSatellite, renderWaterMask, renderNDVI, renderFloodMask, toggleSatelliteLayer, setSatelliteOpacity, getSatelliteCanvas,
+    renderRainfall, toggleRainfallLayer, setRainfallOpacity,
     getMap: () => map
   };
 })();

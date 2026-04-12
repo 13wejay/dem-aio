@@ -142,6 +142,24 @@ DEM.utils = {
   /* --- Client-Side Download --- */
   async downloadBlob(blob, filename) {
     DEM.utils.showLoading(`Preparing ${filename}...`);
+
+    const standardDownload = () => {
+      // Standard Browser Download (with UUID bug fix)
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Delay revoke to fix Edge/Chrome missing filename (UUID) bug
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 1000);
+    };
+
     try {
       if (window.showSaveFilePicker) {
         // Native File System API - saves directly to local drive
@@ -152,26 +170,29 @@ DEM.utils = {
             accept: { [blob.type || 'application/octet-stream']: ['.' + filename.split('.').pop()] }
           }]
         };
-        const handle = await window.showSaveFilePicker(opts);
-        const writable = await handle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        DEM.utils.toast(`Saved directly to local drive: ${filename}`, 'success');
+
+        try {
+          const handle = await window.showSaveFilePicker(opts);
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          DEM.utils.toast(`Saved directly to local drive: ${filename}`, 'success');
+        } catch (pickErr) {
+          // If user cancelled, stop here
+          if (pickErr.name === 'AbortError') {
+            throw pickErr;
+          }
+          // If we lost user gesture context (e.g. after long fetch), fallback
+          if (pickErr.name === 'SecurityError') {
+            console.warn('showSaveFilePicker SecurityError, falling back to standard download');
+            standardDownload();
+          } else {
+            throw pickErr;
+          }
+        }
+
       } else {
-        // Standard Browser Download (with UUID bug fix)
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        
-        // Delay revoke to fix Edge/Chrome missing filename (UUID) bug
-        setTimeout(() => {
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }, 1000);
+        standardDownload();
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
